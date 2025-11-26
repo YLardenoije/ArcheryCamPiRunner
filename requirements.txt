@@ -1,0 +1,11 @@
+# Core dependencies for Archery Cam Pi Runner
+# Install with: pip install -r requirements.txt
+
+# Web framework
+Flask>=2.0.0
+
+# Image processing
+Pillow>=9.0.0
+
+# VLC Python bindings
+python-vlc>=3.0.0
