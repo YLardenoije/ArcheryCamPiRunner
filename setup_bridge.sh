@@ -38,18 +38,14 @@ ip link set dev br0 up
 echo "Enabling IP forwarding..."
 sysctl -w net.ipv4.ip_forward=1
 
-# If eth0 had an IP, move it to bridge
-# Get current IP from eth0 if it exists
-ETH0_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}/\d+' || echo "")
+# Flush any existing IPs from eth0 and eth1
+echo "Removing IPs from eth0 and eth1..."
+ip addr flush dev eth0 2>/dev/null || true
+ip addr flush dev eth1 2>/dev/null || true
 
-if [ -n "$ETH0_IP" ]; then
-    echo "Moving IP $ETH0_IP from eth0 to br0..."
-    ip addr del $ETH0_IP dev eth0 2>/dev/null || true
-    ip addr add $ETH0_IP dev br0
-else
-    echo "No IP found on eth0, attempting DHCP on br0..."
-    dhclient br0 &
-fi
+# Assign static IP to bridge (192.168.10.1/24 for camera network)
+echo "Assigning 192.168.10.1/24 to br0..."
+ip addr add 192.168.10.1/24 dev br0
 
 echo ""
 echo "Bridge setup complete!"
@@ -59,12 +55,15 @@ echo "Current bridge status:"
 brctl show
 
 echo ""
-echo "To make this persistent across reboots, add to /etc/network/interfaces:"
+echo "To make this persistent across reboots, run:"
+echo "    sudo ./setup_bridge_persistent.sh"
+echo ""
+echo "Or manually add to /etc/network/interfaces:"
 echo ""
 echo "auto br0"
-echo "iface br0 inet dhcp"
+echo "iface br0 inet static"
+echo "    address 192.168.10.1"
+echo "    netmask 255.255.255.0"
 echo "    bridge_ports eth0 eth1"
 echo "    bridge_stp off"
 echo "    bridge_fd 0"
-echo ""
-echo "Or create /etc/systemd/network/ configs for networkd."

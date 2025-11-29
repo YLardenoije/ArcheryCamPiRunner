@@ -44,7 +44,8 @@ network:
   bridges:
     br0:
       interfaces: [eth0, eth1]
-      dhcp4: true
+      addresses:
+        - 192.168.10.1/24
       parameters:
         stp: false
         forward-delay: 0
@@ -76,7 +77,9 @@ auto eth1
 iface eth1 inet manual
 
 auto br0
-iface br0 inet dhcp
+iface br0 inet static
+    address 192.168.10.1
+    netmask 255.255.255.0
     bridge_ports eth0 eth1
     bridge_stp off
     bridge_fd 0
