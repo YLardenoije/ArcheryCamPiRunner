@@ -52,6 +52,14 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
    FLASK_PORT = 8080
    ```
 
+5. **(Optional) Setup Network Bridge:**
+   If using a USB-to-LAN adapter (eth1) to extend network connectivity, bridge it with the built-in Ethernet (eth0):
+   ```bash
+   chmod +x setup_bridge_persistent.sh
+   sudo ./setup_bridge_persistent.sh
+   ```
+   This creates a persistent bridge that survives reboots, allowing both interfaces to act as one logical network connection.
+
 ## Usage
 
 ### Starting the Application
@@ -89,15 +97,17 @@ http://<raspberry-pi-ip>:8080
 
 ```
 ArcheryCamPiRunner/
-├── server3.py              # Main application entry point
-├── config.py               # Configuration settings
-├── vlc_player.py          # VLC media player management
-├── gui.py                 # Tkinter GUI and display logic
-├── web_interface.py       # Flask web server and routes
-├── test_*.py              # Unit tests
-├── run_tests.py           # Test runner
-├── requirements-test.txt  # Test dependencies
-└── README.md              # This file
+├── server3.py                    # Main application entry point
+├── config.py                     # Configuration settings
+├── vlc_player.py                # VLC media player management
+├── gui.py                       # Tkinter GUI and display logic
+├── web_interface.py             # Flask web server and routes
+├── setup_bridge.sh              # Network bridge setup (temporary)
+├── setup_bridge_persistent.sh   # Network bridge setup (persistent)
+├── test_*.py                    # Unit tests
+├── run_tests.py                 # Test runner
+├── requirements-test.txt        # Test dependencies
+└── README.md                    # This file
 ```
 
 ## Configuration
@@ -167,6 +177,12 @@ coverage html  # Generate HTML report
 - Lower RTSP stream quality settings on camera
 - Close other applications to free resources
 - Consider using hardware acceleration flags in `vlc_player.py`
+
+### Network Bridge Issues
+- If using USB-to-LAN adapter, verify bridge is active: `brctl show`
+- Check both eth0 and eth1 are in bridge: `brctl show br0`
+- Verify IP is assigned to br0, not eth0/eth1: `ip addr show`
+- Test connectivity on both interfaces
 
 ## Auto-Start on Boot
 
