@@ -9,3 +9,6 @@ Pillow>=9.0.0
 
 # VLC Python bindings
 python-vlc>=3.0.0
+
+# ONVIF camera control (for PTZ)
+onvif-zeep>=0.2.12

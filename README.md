@@ -10,6 +10,7 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 - **Kiosk Mode**: Fullscreen display with no window decorations
 - **Seamless Switching**: Switch between live stream and images
 - **Multi-Camera Support**: Change RTSP stream URLs on the fly
+- **PTZ Control**: Pan, Tilt, Zoom control for ONVIF-compatible cameras with preset management
 
 ## Requirements
 
@@ -25,6 +26,7 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 - Flask
 - Pillow (PIL)
 - python-vlc
+- onvif-zeep (for PTZ control)
 
 ## Installation
 
@@ -42,7 +44,11 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 
 3. **Install Python dependencies:**
    ```bash
-   pip3 install flask pillow python-vlc
+   pip3 install -r requirements.txt
+   ```
+   Or manually:
+   ```bash
+   pip3 install flask pillow python-vlc onvif-zeep
    ```
 
 4. **Configure the application:**
@@ -87,7 +93,32 @@ http://<raspberry-pi-ip>:8080
 - **Show Stream**: Return to live camera feed
 - **Delete Image**: Remove uploaded images
 - **Change Stream**: Update the RTSP URL
+- **PTZ Control**: Control camera pan, tilt, and zoom (ONVIF cameras)
+- **PTZ Presets**: Save and recall camera positions
 - **Shutdown**: Gracefully stop the application
+
+### PTZ Control
+
+The web interface includes PTZ (Pan-Tilt-Zoom) controls for ONVIF-compatible cameras:
+
+1. **Configure Camera**: Enter the camera's IP address, port (usually 80 or 8080), and credentials
+2. **Position Controls**: Use sliders to control pan (-1.0 to 1.0), tilt (-1.0 to 1.0), and zoom (0.0 to 1.0)
+3. **Save Presets**: Save current position as a named preset for quick recall
+4. **Recall Presets**: Click "Go To" on any saved preset to move the camera
+
+Presets are stored persistently in `~/kiosk_config/ptz_presets.json`.
+
+#### PTZ API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ptz/configure` | POST | Configure camera connection (host, port, username, password) |
+| `/ptz/move` | POST | Move to absolute position (pan, tilt, zoom) |
+| `/ptz/position` | GET | Get current PTZ position |
+| `/ptz/presets` | GET | List all saved presets |
+| `/ptz/presets` | POST | Save a new preset (name, pan, tilt, zoom) |
+| `/ptz/presets/<name>` | DELETE | Delete a preset |
+| `/ptz/goto/<name>` | GET | Move camera to saved preset |
 
 ### Keyboard Shortcuts
 
@@ -102,6 +133,7 @@ ArcheryCamPiRunner/
 ├── vlc_player.py                # VLC media player management
 ├── gui.py                       # Tkinter GUI and display logic
 ├── web_interface.py             # Flask web server and routes
+├── ptz_controller.py            # PTZ camera control and presets
 ├── setup_bridge.sh              # Network bridge setup (temporary)
 ├── setup_bridge_persistent.sh   # Network bridge setup (persistent)
 ├── test_*.py                    # Unit tests
@@ -117,8 +149,13 @@ ArcheryCamPiRunner/
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `UPLOAD_FOLDER` | Directory for uploaded images | `~/kiosk_images` |
+| `PTZ_PRESETS_FILE` | JSON file for PTZ presets | `~/kiosk_config/ptz_presets.json` |
 | `RTSP_URL` | Default RTSP stream URL | `rtsp://192.168.10.31:554/live/0/MAIN` |
 | `FLASK_PORT` | Web interface port | `8080` |
+| `PTZ_CAMERA_HOST` | PTZ camera IP address | `None` |
+| `PTZ_CAMERA_PORT` | PTZ camera ONVIF port | `80` |
+| `PTZ_CAMERA_USERNAME` | PTZ camera username | `admin` |
+| `PTZ_CAMERA_PASSWORD` | PTZ camera password | `admin` |
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
 

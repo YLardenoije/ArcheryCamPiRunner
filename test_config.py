@@ -36,6 +36,27 @@ class TestConfig(unittest.TestCase):
         """Test that fade steps is a positive integer."""
         self.assertIsInstance(config.FADE_STEPS, int)
         self.assertGreater(config.FADE_STEPS, 0)
+    
+    def test_ptz_presets_file_path(self):
+        """Test that PTZ presets file path is set."""
+        self.assertIn("ptz_presets.json", config.PTZ_PRESETS_FILE)
+        self.assertNotIn("~", config.PTZ_PRESETS_FILE)
+    
+    def test_ptz_presets_directory_exists(self):
+        """Test that PTZ presets directory is created."""
+        ptz_dir = os.path.dirname(config.PTZ_PRESETS_FILE)
+        self.assertTrue(os.path.exists(ptz_dir))
+    
+    def test_ptz_camera_port_is_int(self):
+        """Test that PTZ camera port is an integer."""
+        self.assertIsInstance(config.PTZ_CAMERA_PORT, int)
+        self.assertGreater(config.PTZ_CAMERA_PORT, 0)
+        self.assertLess(config.PTZ_CAMERA_PORT, 65536)
+    
+    def test_ptz_camera_credentials_are_strings(self):
+        """Test that PTZ camera credentials are strings."""
+        self.assertIsInstance(config.PTZ_CAMERA_USERNAME, str)
+        self.assertIsInstance(config.PTZ_CAMERA_PASSWORD, str)
 
 
 if __name__ == "__main__":
