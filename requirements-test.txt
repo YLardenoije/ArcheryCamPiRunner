@@ -1,0 +1,11 @@
+# Test dependencies
+# Install with: pip install -r requirements-test.txt
+
+# Core testing
+unittest2; python_version < '3.0'
+
+# Code coverage (optional but recommended)
+coverage>=7.0.0
+
+# Test isolation and mocking
+mock>=4.0.0; python_version < '3.3'
