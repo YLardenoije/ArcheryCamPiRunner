@@ -146,20 +146,27 @@ class WebInterface:
         self.shutdown_callback = shutdown_callback
         self.rtsp_url = config.RTSP_URL
         
-        # Initialize PTZ controller if not provided
-        if ptz_controller is None:
-            self.ptz = PTZController(
-                presets_file=config.PTZ_PRESETS_FILE,
-                camera_host=config.PTZ_CAMERA_HOST,
-                camera_port=config.PTZ_CAMERA_PORT,
-                username=config.PTZ_CAMERA_USERNAME,
-                password=config.PTZ_CAMERA_PASSWORD
-            )
-        else:
-            self.ptz = ptz_controller
+        # Use provided PTZ controller or create default one
+        self.ptz = ptz_controller if ptz_controller is not None else PTZController(
+            presets_file=config.PTZ_PRESETS_FILE,
+            camera_host=config.PTZ_CAMERA_HOST,
+            camera_port=config.PTZ_CAMERA_PORT,
+            username=config.PTZ_CAMERA_USERNAME,
+            password=config.PTZ_CAMERA_PASSWORD
+        )
         
         self.app = Flask(__name__)
         self._setup_routes()
+    
+    def _is_api_request(self):
+        """Check if request expects JSON response."""
+        return request.is_json or request.headers.get('Accept') == 'application/json'
+    
+    def _error_response(self, message, status_code):
+        """Return error response in appropriate format."""
+        if self._is_api_request():
+            return jsonify({"error": message}), status_code
+        return message, status_code
     
     def _setup_routes(self):
         """Setup Flask routes."""
@@ -300,12 +307,11 @@ class WebInterface:
             tilt = float(request.form.get("tilt", 0))
             zoom = float(request.form.get("zoom", 0))
         except (TypeError, ValueError):
-            return "Invalid PTZ values", 400
+            return self._error_response("Invalid PTZ values", 400)
         
         success = self.ptz.absolute_move(pan, tilt, zoom)
         
-        # Check if this is an API call (JSON) or form submission
-        if request.is_json or request.headers.get('Accept') == 'application/json':
+        if self._is_api_request():
             return jsonify({
                 "success": success,
                 "position": {"pan": pan, "tilt": tilt, "zoom": zoom}
@@ -343,18 +349,14 @@ class WebInterface:
             zoom = request.form.get("zoom", 0)
         
         if not name:
-            if request.is_json:
-                return jsonify({"error": "Preset name is required"}), 400
-            return "Preset name is required", 400
+            return self._error_response("Preset name is required", 400)
         
         try:
             pan = float(pan)
             tilt = float(tilt)
             zoom = float(zoom)
         except (TypeError, ValueError):
-            if request.is_json:
-                return jsonify({"error": "Invalid PTZ values"}), 400
-            return "Invalid PTZ values", 400
+            return self._error_response("Invalid PTZ values", 400)
         
         success = self.ptz.save_preset(name, pan, tilt, zoom)
         
@@ -388,7 +390,7 @@ class WebInterface:
         name = unquote(name)
         success = self.ptz.goto_preset(name)
         
-        if request.is_json or request.headers.get('Accept') == 'application/json':
+        if self._is_api_request():
             if success:
                 preset = self.ptz.get_preset(name)
                 return jsonify({"success": True, "preset": name, "position": preset})

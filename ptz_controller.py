@@ -1,11 +1,15 @@
 """PTZ (Pan-Tilt-Zoom) controller for ONVIF-compatible cameras."""
 import json
 import os
-from typing import Optional
+import re
+from typing import Optional, Tuple
 
 
 class PTZController:
     """Manages PTZ control and presets for ONVIF cameras."""
+    
+    # Regex pattern for valid preset names
+    PRESET_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\s]+$')
     
     def __init__(self, presets_file: str, camera_host: Optional[str] = None,
                  camera_port: int = 80, username: str = "admin", password: str = "admin"):
@@ -34,6 +38,23 @@ class PTZController:
         
         # Load presets from file
         self._presets = self._load_presets()
+    
+    @staticmethod
+    def _clamp_ptz_values(pan: float, tilt: float, zoom: float) -> Tuple[float, float, float]:
+        """Clamp PTZ values to valid ranges.
+        
+        Args:
+            pan: Pan value to clamp
+            tilt: Tilt value to clamp
+            zoom: Zoom value to clamp
+            
+        Returns:
+            Tuple of (pan, tilt, zoom) clamped to valid ranges
+        """
+        pan = max(-1.0, min(1.0, float(pan)))
+        tilt = max(-1.0, min(1.0, float(tilt)))
+        zoom = max(0.0, min(1.0, float(zoom)))
+        return pan, tilt, zoom
     
     def _load_presets(self) -> dict:
         """Load presets from JSON file."""
@@ -161,9 +182,7 @@ class PTZController:
             True if move command sent successfully
         """
         # Clamp values to valid ranges
-        pan = max(-1.0, min(1.0, float(pan)))
-        tilt = max(-1.0, min(1.0, float(tilt)))
-        zoom = max(0.0, min(1.0, float(zoom)))
+        pan, tilt, zoom = self._clamp_ptz_values(pan, tilt, zoom)
         
         if not self.is_connected():
             print(f"PTZ: Not connected, caching position: pan={pan}, tilt={tilt}, zoom={zoom}")
@@ -223,7 +242,7 @@ class PTZController:
         """Save a PTZ position as a preset.
         
         Args:
-            name: Preset name (alphanumeric, underscores, hyphens)
+            name: Preset name (alphanumeric, underscores, hyphens, spaces)
             pan: Pan position (-1.0 to 1.0)
             tilt: Tilt position (-1.0 to 1.0)
             zoom: Zoom level (0.0 to 1.0)
@@ -231,15 +250,13 @@ class PTZController:
         Returns:
             True if saved successfully
         """
-        # Validate name
-        if not name or not name.replace('_', '').replace('-', '').replace(' ', '').isalnum():
+        # Validate name using regex pattern
+        if not name or not self.PRESET_NAME_PATTERN.match(name):
             print(f"PTZ: Invalid preset name: {name}")
             return False
         
-        # Clamp values
-        pan = max(-1.0, min(1.0, float(pan)))
-        tilt = max(-1.0, min(1.0, float(tilt)))
-        zoom = max(0.0, min(1.0, float(zoom)))
+        # Clamp values using helper
+        pan, tilt, zoom = self._clamp_ptz_values(pan, tilt, zoom)
         
         self._presets[name] = {
             "pan": pan,
