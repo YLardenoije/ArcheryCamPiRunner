@@ -131,6 +131,7 @@ ArcheryCamPiRunner/
 | `ONVIF_FALLBACK_TIMEOUT` | Seconds for ONVIF WS-Discovery fallback | `3.0` |
 | `RTSP_SCAN_FALLBACK_TIMEOUT` | Seconds for RTSP port scan fallback | `4.0` |
 | `RTSP_SCAN_SUBNET` | CIDR subnet for RTSP fallback scan (empty = auto /24) | `` |
+| `RTSP_SCAN_SUBNETS` | Optional list of fallback subnets to scan in sequence | `[]` |
 | `RTSP_SCAN_PORTS` | RTSP ports to scan in fallback mode | `[554, 8554]` |
 | `RTSP_SCAN_MAX_HOSTS` | Max hosts to probe during fallback scan | `254` |
 | `RTSP_SCAN_INTERFACE_HINT` | Interface to prefer for auto subnet selection | `eth0` |
@@ -146,6 +147,7 @@ On startup, the app can auto-discover cameras via zeroconf and start the first d
 - If zeroconf returns no cameras, fallback discovery runs in order:
    1. ONVIF WS-Discovery probe
    2. RTSP subnet port scan
+- For temporary mixed-subnet PoC setups, set `RTSP_SCAN_SUBNETS` (for example `['192.168.100.0/24', '192.168.10.0/24']`) to scan both networks.
 - If all methods find nothing, the app starts without a stream until you select one.
 - Discovery scans several common camera service types, including RTSP, ONVIF, and Axis-style advertisements.
 

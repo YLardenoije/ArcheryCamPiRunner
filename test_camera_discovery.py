@@ -184,6 +184,54 @@ class TestCameraDiscovery(unittest.TestCase):
 
         self.assertEqual(cameras, [])
 
+    def test_discover_rtsp_port_scan_cameras_multi_dedupes(self):
+        scan_one = [
+            {
+                "name": "scan-192.168.100.10:554",
+                "url": "rtsp://192.168.100.10:554/live/0/MAIN",
+                "service_type": "_rtsp._tcp.scan",
+                "host": "192.168.100.10",
+                "port": 554,
+                "source": "rtsp-port-scan",
+            }
+        ]
+        scan_two = [
+            {
+                "name": "scan-192.168.10.103:554",
+                "url": "rtsp://192.168.10.103:554/live/0/MAIN",
+                "service_type": "_rtsp._tcp.scan",
+                "host": "192.168.10.103",
+                "port": 554,
+                "source": "rtsp-port-scan",
+            },
+            {
+                "name": "scan-192.168.100.10:554",
+                "url": "rtsp://192.168.100.10:554/live/0/MAIN",
+                "service_type": "_rtsp._tcp.scan",
+                "host": "192.168.100.10",
+                "port": 554,
+                "source": "rtsp-port-scan",
+            },
+        ]
+
+        with patch(
+            "camera_discovery.discover_rtsp_port_scan_cameras",
+            side_effect=[scan_one, scan_two],
+        ):
+            cameras = camera_discovery.discover_rtsp_port_scan_cameras_multi(
+                subnet_cidrs=["192.168.100.0/24", "192.168.10.0/24"],
+                timeout_seconds=0.2,
+            )
+
+        urls = sorted([c["url"] for c in cameras])
+        self.assertEqual(
+            urls,
+            [
+                "rtsp://192.168.10.103:554/live/0/MAIN",
+                "rtsp://192.168.100.10:554/live/0/MAIN",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

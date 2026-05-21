@@ -422,3 +422,45 @@ def discover_rtsp_port_scan_cameras(
             pass
 
     return cameras
+
+
+def discover_rtsp_port_scan_cameras_multi(
+    subnet_cidrs,
+    ports=None,
+    timeout_seconds=4.0,
+    max_hosts=254,
+    default_path="",
+    interface_hint="",
+    require_rtsp_handshake=True,
+):
+    """Scan multiple subnets and combine discovered RTSP cameras.
+
+    Returns:
+        list[dict]: Deduplicated camera entries across all subnets.
+    """
+    merged = []
+    seen_urls = set()
+
+    for subnet in subnet_cidrs or []:
+        subnet = (subnet or "").strip()
+        if not subnet:
+            continue
+
+        print(f"RTSP scan multi-subnet pass: {subnet}")
+        cameras = discover_rtsp_port_scan_cameras(
+            subnet_cidr=subnet,
+            ports=ports,
+            timeout_seconds=timeout_seconds,
+            max_hosts=max_hosts,
+            default_path=default_path,
+            interface_hint=interface_hint,
+            require_rtsp_handshake=require_rtsp_handshake,
+        )
+        for camera in cameras:
+            url = camera.get("url", "")
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            merged.append(camera)
+
+    return merged

@@ -5,7 +5,12 @@ import threading
 import tkinter as tk
 
 import config
-from camera_discovery import discover_onvif_ws_cameras, discover_rtsp_cameras, discover_rtsp_port_scan_cameras
+from camera_discovery import (
+    discover_onvif_ws_cameras,
+    discover_rtsp_cameras,
+    discover_rtsp_port_scan_cameras,
+    discover_rtsp_port_scan_cameras_multi,
+)
 from vlc_player import VLCPlayer
 from gui import KioskGUI
 from web_interface import WebInterface
@@ -52,15 +57,27 @@ if __name__ == "__main__":
 
     if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
         print("Activating fallback 2/2: RTSP subnet port scan")
-        discovered_cameras = discover_rtsp_port_scan_cameras(
-            subnet_cidr=config.RTSP_SCAN_SUBNET,
-            ports=config.RTSP_SCAN_PORTS,
-            timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
-            max_hosts=config.RTSP_SCAN_MAX_HOSTS,
-            default_path=config.RTSP_DEFAULT_PATH,
-            interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
-            require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
-        )
+        if getattr(config, "RTSP_SCAN_SUBNETS", None):
+            print(f"RTSP fallback multi-subnet mode: {config.RTSP_SCAN_SUBNETS}")
+            discovered_cameras = discover_rtsp_port_scan_cameras_multi(
+                subnet_cidrs=config.RTSP_SCAN_SUBNETS,
+                ports=config.RTSP_SCAN_PORTS,
+                timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                default_path=config.RTSP_DEFAULT_PATH,
+                interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+            )
+        else:
+            discovered_cameras = discover_rtsp_port_scan_cameras(
+                subnet_cidr=config.RTSP_SCAN_SUBNET,
+                ports=config.RTSP_SCAN_PORTS,
+                timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                default_path=config.RTSP_DEFAULT_PATH,
+                interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+            )
         if discovered_cameras:
             print("Discovered cameras via RTSP scan fallback:")
             for camera in discovered_cameras:
