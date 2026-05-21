@@ -156,6 +156,26 @@ if __name__ == "__main__":
         "last_restart_ts": 0.0,
     }
 
+    # VLC state is polled on a dedicated background thread so that a blocked/deadlocked
+    # libvlc call never freezes the Tk main event loop.
+    _vlc_state_cache = {"state_text": "unknown", "updated_at": 0.0}
+    _vlc_state_lock = threading.Lock()
+
+    def _vlc_state_poller():
+        """Background thread: polls VLC state every 2 s and caches the result."""
+        while True:
+            time.sleep(2)
+            try:
+                state = vlc_player.player.get_state()
+                state_text = str(state).lower()
+            except Exception:
+                state_text = "error"
+            with _vlc_state_lock:
+                _vlc_state_cache["state_text"] = state_text
+                _vlc_state_cache["updated_at"] = time.time()
+
+    threading.Thread(target=_vlc_state_poller, daemon=True).start()
+
     def _current_stream_url():
         return (getattr(web, "rtsp_url", "") or "").strip()
 
@@ -206,16 +226,15 @@ if __name__ == "__main__":
             watchdog_state["consecutive_failures"] = 0
             return
 
-        try:
-            state = vlc_player.player.get_state()
-        except Exception as exc:
-            print("Watchdog: failed to read VLC state:", exc)
-            watchdog_state["consecutive_failures"] += 1
-            if watchdog_state["consecutive_failures"] >= threshold:
-                _restart_stream_async("state-unavailable")
-            return
+        # Read the cached state written by _vlc_state_poller (off main thread).
+        # If the cache is stale (poller itself blocked > 15 s), treat as error.
+        with _vlc_state_lock:
+            state_text = _vlc_state_cache["state_text"]
+            cache_age = time.time() - _vlc_state_cache["updated_at"]
 
-        state_text = str(state).lower()
+        if cache_age > 15:
+            state_text = "error"
+            print(f"Watchdog: VLC state cache stale ({cache_age:.0f}s) — treating as error")
         if "playing" in state_text or "opening" in state_text or "buffering" in state_text:
             watchdog_state["consecutive_failures"] = 0
             return
