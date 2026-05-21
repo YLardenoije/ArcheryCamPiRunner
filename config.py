@@ -8,6 +8,11 @@ UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
 RTSP_URL = "rtsp://192.168.10.31:554/live/0/MAIN"
 # RTSP_URL = "rtsp://admin:admin@192.168.100.27:554/11"
 FLASK_PORT = 8080
+ENABLE_ZEROCONF_DISCOVERY = True
+ZEROCONF_DISCOVERY_TIMEOUT = 8.0
+ZEROCONF_SERVICE_TYPES = [
+	"_rtsp._tcp.local.",
+]
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

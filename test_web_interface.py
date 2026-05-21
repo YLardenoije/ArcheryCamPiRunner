@@ -53,6 +53,18 @@ class TestWebInterface(unittest.TestCase):
         self.assertEqual(web.vlc_player, self.mock_vlc_player)
         self.assertEqual(web.shutdown_callback, self.mock_shutdown)
         self.assertIsNotNone(web.rtsp_url)
+
+    def test_web_interface_uses_initial_rtsp_url(self):
+        """Test web interface can start with a discovered RTSP URL."""
+        from web_interface import WebInterface
+        discovered_url = "rtsp://192.168.1.123:554/discovered"
+        web = WebInterface(
+            self.mock_gui,
+            self.mock_vlc_player,
+            self.mock_shutdown,
+            initial_rtsp_url=discovered_url,
+        )
+        self.assertEqual(web.rtsp_url, discovered_url)
     
     def test_index_lists_images(self):
         """Test index page lists uploaded images."""

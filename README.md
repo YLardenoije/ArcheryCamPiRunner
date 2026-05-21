@@ -119,8 +119,20 @@ ArcheryCamPiRunner/
 | `UPLOAD_FOLDER` | Directory for uploaded images | `~/kiosk_images` |
 | `RTSP_URL` | Default RTSP stream URL | `rtsp://192.168.10.31:554/live/0/MAIN` |
 | `FLASK_PORT` | Web interface port | `8080` |
+| `ENABLE_ZEROCONF_DISCOVERY` | Discover RTSP camera on boot using mDNS | `True` |
+| `ZEROCONF_DISCOVERY_TIMEOUT` | Seconds to wait for discovery on boot | `8.0` |
+| `ZEROCONF_SERVICE_TYPES` | Zeroconf service types to browse | `[_rtsp._tcp.local.]` |
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
+
+### Boot-Time Camera Discovery
+
+On startup, the app can auto-discover a camera via zeroconf and start that stream automatically.
+
+- If a camera is discovered within `ZEROCONF_DISCOVERY_TIMEOUT`, that URL is used.
+- If discovery times out or zeroconf is unavailable, the app falls back to `RTSP_URL`.
+
+To disable discovery, set `ENABLE_ZEROCONF_DISCOVERY = False` in `config.py`.
 
 ## Development
 

@@ -9,3 +9,6 @@ Pillow>=9.0.0
 
 # VLC Python bindings
 python-vlc>=3.0.0
+
+# Zeroconf camera discovery
+zeroconf>=0.132.2

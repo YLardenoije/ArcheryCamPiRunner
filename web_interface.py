@@ -51,11 +51,11 @@ button{padding:10px 15px;margin:5px;}
 class WebInterface:
     """Flask web interface for controlling the kiosk."""
     
-    def __init__(self, gui, vlc_player, shutdown_callback):
+    def __init__(self, gui, vlc_player, shutdown_callback, initial_rtsp_url=None):
         self.gui = gui
         self.vlc_player = vlc_player
         self.shutdown_callback = shutdown_callback
-        self.rtsp_url = config.RTSP_URL
+        self.rtsp_url = initial_rtsp_url or config.RTSP_URL
         
         self.app = Flask(__name__)
         self._setup_routes()

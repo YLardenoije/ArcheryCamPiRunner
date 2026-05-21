@@ -5,6 +5,7 @@ import threading
 import tkinter as tk
 
 import config
+from camera_discovery import discover_rtsp_url
 from vlc_player import VLCPlayer
 from gui import KioskGUI
 from web_interface import WebInterface
@@ -21,6 +22,18 @@ def shutdown(*args):
 
 
 if __name__ == "__main__":
+    boot_rtsp_url = config.RTSP_URL
+    if config.ENABLE_ZEROCONF_DISCOVERY:
+        discovered_url = discover_rtsp_url(
+            config.ZEROCONF_SERVICE_TYPES,
+            timeout_seconds=config.ZEROCONF_DISCOVERY_TIMEOUT,
+        )
+        if discovered_url:
+            boot_rtsp_url = discovered_url
+            print(f"Discovered RTSP camera via zeroconf: {boot_rtsp_url}")
+        else:
+            print("No zeroconf RTSP camera discovered; using configured RTSP_URL")
+
     # Create Tkinter root window
     root = tk.Tk()
     
@@ -31,7 +44,7 @@ if __name__ == "__main__":
     gui = KioskGUI(root, vlc_player)
     
     # Initialize web interface
-    web = WebInterface(gui, vlc_player, shutdown)
+    web = WebInterface(gui, vlc_player, shutdown, initial_rtsp_url=boot_rtsp_url)
     
     # Setup signal handlers
     signal.signal(signal.SIGINT, shutdown)
@@ -44,7 +57,7 @@ if __name__ == "__main__":
     # Embed VLC and start streaming
     root.after(100, lambda: (
         gui.embed_vlc(),
-        vlc_player.start_media(config.RTSP_URL)
+        vlc_player.start_media(boot_rtsp_url)
     ))
     
     # Start Tkinter main loop
