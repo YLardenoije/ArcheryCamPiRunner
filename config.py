@@ -46,8 +46,8 @@ ONVIF_PASSWORD = "admin"
 ONVIF_PORT = 80
 # Travel time (seconds) to move from one extreme to the other.
 # Tune these to match your cameras' motor speed.
-ONVIF_FULL_ZOOM_TIME_SECONDS = 5.0
-ONVIF_FULL_FOCUS_TIME_SECONDS = 3.0
+ONVIF_FULL_ZOOM_TIME_SECONDS = 10.0
+ONVIF_FULL_FOCUS_TIME_SECONDS = 10.0
 ONVIF_ZOOM_IN_SPEED = 0.5   # zoom-in speed (0.0-1.0); lower = more accurate positioning
 
 # Display settings
