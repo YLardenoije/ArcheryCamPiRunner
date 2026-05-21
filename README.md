@@ -135,6 +135,7 @@ On startup, the app can auto-discover cameras via zeroconf and start the first d
 
 - If cameras are discovered within `ZEROCONF_DISCOVERY_TIMEOUT`, the first URL is used and the rest appear in the dropdown.
 - If discovery times out or zeroconf is unavailable, the app starts without a stream until you select one.
+- Discovery scans several common camera service types, including RTSP, ONVIF, and Axis-style advertisements.
 
 To disable discovery, set `ENABLE_ZEROCONF_DISCOVERY = False` in `config.py`.
 

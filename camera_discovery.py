@@ -40,6 +40,13 @@ def _build_rtsp_url(info):
     return f"rtsp://{host}:{port}{path}"
 
 
+def _get_service_name(name):
+    """Normalize zeroconf service instance names for display."""
+    if not name:
+        return "unknown camera"
+    return str(name).rstrip(".")
+
+
 def discover_rtsp_url(service_types, timeout_seconds=8.0):
     """Discover the first RTSP URL from zeroconf services.
 
@@ -130,7 +137,7 @@ def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
                 host = socket.inet_ntoa(addresses[0]) if addresses else ""
                 cameras.append(
                     {
-                        "name": name,
+                        "name": _get_service_name(name),
                         "url": url,
                         "service_type": service_type,
                         "host": host,
@@ -154,6 +161,8 @@ def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
         for service_type in service_types:
             browsers.append(ServiceBrowser(zeroconf, service_type, listener))
         done_event.wait(timeout=max(0.1, float(timeout_seconds)))
+        if not cameras:
+            print("Zeroconf discovery finished with no cameras found.")
         return cameras
     finally:
         for browser in browsers:

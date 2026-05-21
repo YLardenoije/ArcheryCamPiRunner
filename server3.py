@@ -22,6 +22,11 @@ def shutdown(*args):
 if __name__ == "__main__":
     discovered_cameras = []
     if config.ENABLE_ZEROCONF_DISCOVERY:
+        print(
+            "Zeroconf discovery enabled for service types:",
+            ", ".join(config.ZEROCONF_SERVICE_TYPES),
+            f"(timeout={config.ZEROCONF_DISCOVERY_TIMEOUT}s)",
+        )
         discovered_cameras = discover_rtsp_cameras(
             config.ZEROCONF_SERVICE_TYPES,
             timeout_seconds=config.ZEROCONF_DISCOVERY_TIMEOUT,
@@ -31,7 +36,7 @@ if __name__ == "__main__":
             for camera in discovered_cameras:
                 print(f" - {camera['name']}: {camera['url']}")
         else:
-            print("No zeroconf RTSP cameras discovered on launch")
+            print("No zeroconf RTSP cameras discovered on launch; check whether the cameras advertise mDNS/zeroconf services")
     else:
         print("Zeroconf discovery disabled")
 

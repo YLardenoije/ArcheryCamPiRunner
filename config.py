@@ -11,6 +11,9 @@ ENABLE_ZEROCONF_DISCOVERY = True
 ZEROCONF_DISCOVERY_TIMEOUT = 8.0
 ZEROCONF_SERVICE_TYPES = [
 	"_rtsp._tcp.local.",
+	"_onvif._tcp.local.",
+	"_camera._tcp.local.",
+	"_axis-video._tcp.local.",
 ]
 
 # Display settings
