@@ -86,9 +86,9 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
                         <input type="number" class="ptz-num" id="ptz-zn-{{ loop.index }}"
                                      min="0" max="100" step="0.0001"
                                      value="{{ '%.4f'|format(camera.ptz.zoom * 100) }}"
-                                     oninput="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
-                                     onchange="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
-                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }}); return false;}">
+                                     oninput="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value"
+                                     onchange="ptzNumberCommit(this,{{ loop.index }},'ptz-z-{{ loop.index }}')"
+                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); ptzNumberCommit(this,{{ loop.index }},'ptz-z-{{ loop.index }}'); return false;}">
                     </div>
                 </label>
                 <label>Focus &nbsp;<small>Near &#8592; &#8594; Far</small>
@@ -101,9 +101,9 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
                         <input type="number" class="ptz-num" id="ptz-fn-{{ loop.index }}"
                                      min="0" max="100" step="0.0001"
                                      value="{{ '%.4f'|format(camera.ptz.focus * 100) }}"
-                                     oninput="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
-                                     onchange="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
-                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }}); return false;}">
+                                     oninput="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value"
+                                     onchange="ptzNumberCommit(this,{{ loop.index }},'ptz-f-{{ loop.index }}')"
+                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); ptzNumberCommit(this,{{ loop.index }},'ptz-f-{{ loop.index }}'); return false;}">
                     </div>
                 </label>
             </div>
@@ -138,29 +138,65 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
 
 <script>
 const _ptzTimers = {};
+const _ptzBusy = {};
+const _ptzQueued = {};
+
+function _ptzPayload(card, changedName) {
+    return {
+        url: card.dataset.url,
+        zoom: parseFloat(card.querySelector('[name="zoom"]').value) / 100.0,
+        focus: parseFloat(card.querySelector('[name="focus"]').value) / 100.0,
+        changed: changedName
+    };
+}
+
+function _sendPtz(idx, payload) {
+    const url = payload.url;
+    const statusEl = document.getElementById('ptz-status-' + idx);
+    _ptzBusy[url] = true;
+    if (statusEl) { statusEl.textContent = ' Applying\u2026'; statusEl.style.color = '#a60'; }
+
+    fetch('/ptz_live', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    }).then(function(r){ return r.json(); }).then(function(d) {
+        if (statusEl) {
+            statusEl.textContent = d.ok ? ' \u2713 Applied' : ' \u2717 ' + d.msg;
+            statusEl.style.color = d.ok ? 'green' : '#c00';
+            setTimeout(function(){ if (statusEl) statusEl.textContent = ''; }, 4000);
+        }
+    }).catch(function() {
+        if (statusEl) { statusEl.textContent = ' \u2717 Request failed'; statusEl.style.color = '#c00'; }
+    }).finally(function() {
+        _ptzBusy[url] = false;
+        const queued = _ptzQueued[url];
+        if (queued) {
+            _ptzQueued[url] = null;
+            _sendPtz(queued.idx, queued.payload);
+        }
+    });
+}
+
 function ptzSliderChange(slider, idx) {
         const card = slider.closest('.camera-card');
-        const url = card.dataset.url;
+    const url = card.dataset.url;
         clearTimeout(_ptzTimers[url]);
         _ptzTimers[url] = setTimeout(function() {
-                const zoom  = parseFloat(card.querySelector('[name="zoom"]').value)  / 100.0;
-                const focus = parseFloat(card.querySelector('[name="focus"]').value) / 100.0;
-                const statusEl = document.getElementById('ptz-status-' + idx);
-                if (statusEl) { statusEl.textContent = ' Applying\u2026'; statusEl.style.color = '#a60'; }
-                fetch('/ptz_live', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({url: url, zoom: zoom, focus: focus, changed: slider.name})
-                }).then(function(r){ return r.json(); }).then(function(d) {
-                        if (statusEl) {
-                                statusEl.textContent = d.ok ? ' \u2713 Applied' : ' \u2717 ' + d.msg;
-                                statusEl.style.color = d.ok ? 'green' : '#c00';
-                                setTimeout(function(){ if (statusEl) statusEl.textContent = ''; }, 4000);
-                        }
-                }).catch(function() {
-                        if (statusEl) { statusEl.textContent = ' \u2717 Request failed'; statusEl.style.color = '#c00'; }
-                });
+        const payload = _ptzPayload(card, slider.name);
+        if (_ptzBusy[url]) {
+            _ptzQueued[url] = {idx: idx, payload: payload};
+        } else {
+            _sendPtz(idx, payload);
+        }
         }, 1000);
+}
+
+function ptzNumberCommit(input, idx, sliderId) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+    slider.value = input.value;
+    ptzSliderChange(slider, idx);
 }
 </script>
 </body></html>
