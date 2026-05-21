@@ -104,6 +104,7 @@ ArcheryCamPiRunner/
 ├── web_interface.py             # Flask web server and routes
 ├── setup_bridge.sh              # Network bridge setup (temporary)
 ├── setup_bridge_persistent.sh   # Network bridge setup (persistent)
+├── update_app.sh                # Pull latest code and refresh dependencies
 ├── test_*.py                    # Unit tests
 ├── run_tests.py                 # Test runner
 ├── requirements-test.txt        # Test dependencies
@@ -165,6 +166,19 @@ coverage run run_tests.py
 coverage report
 coverage html  # Generate HTML report
 ```
+
+### Update Script
+
+Use the included script to update the app from Git, reinstall dependencies, and restart the kiosk service.
+
+```bash
+chmod +x update_app.sh
+./update_app.sh
+```
+
+Optional environment variables:
+- `RESTART_SERVICE=0` to skip service restart
+- `SERVICE_NAME=my-kiosk.service` to restart a different systemd service
 
 ## Troubleshooting
 
