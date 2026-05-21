@@ -462,6 +462,7 @@ def discover_rtsp_port_scan_cameras_multi(
     interface_hint="",
     require_rtsp_handshake=True,
     connect_timeout_seconds=0.0,
+    retry_without_handshake=False,
 ):
     """Scan multiple subnets and combine discovered RTSP cameras.
 
@@ -487,6 +488,25 @@ def discover_rtsp_port_scan_cameras_multi(
             require_rtsp_handshake=require_rtsp_handshake,
             connect_timeout_seconds=connect_timeout_seconds,
         )
+
+        if not cameras and require_rtsp_handshake and retry_without_handshake:
+            print(
+                f"RTSP scan fallback active on {subnet}: retrying without RTSP handshake validation"
+            )
+            cameras = discover_rtsp_port_scan_cameras(
+                subnet_cidr=subnet,
+                ports=ports,
+                timeout_seconds=timeout_seconds,
+                max_hosts=max_hosts,
+                default_path=default_path,
+                interface_hint=interface_hint,
+                require_rtsp_handshake=False,
+                connect_timeout_seconds=connect_timeout_seconds,
+            )
+            for camera in cameras:
+                camera["source"] = "rtsp-port-scan-unverified"
+                camera["name"] = f"{camera.get('name', 'scan-camera')} (unverified)"
+
         for camera in cameras:
             url = camera.get("url", "")
             if not url or url in seen_urls:

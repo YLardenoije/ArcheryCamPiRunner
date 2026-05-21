@@ -232,6 +232,39 @@ class TestCameraDiscovery(unittest.TestCase):
             ],
         )
 
+    def test_discover_rtsp_port_scan_cameras_multi_retries_without_handshake(self):
+        retry_result = [
+            {
+                "name": "scan-192.168.10.103:554",
+                "url": "rtsp://192.168.10.103:554/live/0/MAIN",
+                "service_type": "_rtsp._tcp.scan",
+                "host": "192.168.10.103",
+                "port": 554,
+                "source": "rtsp-port-scan",
+            }
+        ]
+
+        with patch(
+            "camera_discovery.discover_rtsp_port_scan_cameras",
+            side_effect=[[], retry_result],
+        ) as scan_mock:
+            cameras = camera_discovery.discover_rtsp_port_scan_cameras_multi(
+                subnet_cidrs=["192.168.10.0/24"],
+                timeout_seconds=0.2,
+                require_rtsp_handshake=True,
+                retry_without_handshake=True,
+            )
+
+        self.assertEqual(len(cameras), 1)
+        self.assertEqual(cameras[0]["url"], "rtsp://192.168.10.103:554/live/0/MAIN")
+        self.assertEqual(cameras[0]["source"], "rtsp-port-scan-unverified")
+        self.assertIn("(unverified)", cameras[0]["name"])
+
+        first_call = scan_mock.call_args_list[0].kwargs
+        second_call = scan_mock.call_args_list[1].kwargs
+        self.assertTrue(first_call["require_rtsp_handshake"])
+        self.assertFalse(second_call["require_rtsp_handshake"])
+
 
 if __name__ == "__main__":
     unittest.main()
