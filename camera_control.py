@@ -6,6 +6,7 @@ import traceback
 # Ports to probe when the configured port fails to return a valid ONVIF response.
 # Many cameras serve an HTML admin page on 80 while ONVIF is on 8080 / 2020 etc.
 _ONVIF_FALLBACK_PORTS = [8080, 2020, 8000, 8899, 80]
+_UNRELIABLE_STATUS_HOSTS = set()
 
 
 def _try_get_zoom_pos(ptz_service, profile_token):
@@ -120,7 +121,12 @@ def apply_zoom_focus_onvif(
             safe_zoom_in_speed = max(0.05, min(1.0, float(zoom_in_speed)))
             initial_pos = _try_get_zoom_pos(ptz_service, profile_token)
             print(f"PTZ: GetStatus initial zoom position={initial_pos}")
-            use_feedback = initial_pos is not None
+            host_key = f"{host}:{try_port}"
+            if host_key in _UNRELIABLE_STATUS_HOSTS:
+                print(f"PTZ: GetStatus previously marked unreliable for {host_key}; skipping feedback mode")
+                use_feedback = False
+            else:
+                use_feedback = initial_pos is not None
             fallback_due_to_stuck_status = False
 
             if use_feedback:
@@ -160,6 +166,7 @@ def apply_zoom_focus_onvif(
 
                         if stagnant_reads >= 10:
                             fallback_due_to_stuck_status = True
+                            _UNRELIABLE_STATUS_HOSTS.add(host_key)
                             print("PTZ: feedback aborted; GetStatus appears stuck")
                             break
                         time.sleep(0.1)
