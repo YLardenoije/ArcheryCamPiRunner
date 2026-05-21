@@ -71,6 +71,40 @@ class TestCameraDiscovery(unittest.TestCase):
 
         self.assertEqual(url, "rtsp://192.168.1.20:554/main")
 
+    def test_discover_returns_camera_list(self):
+        class FakeListener:
+            pass
+
+        class FakeZeroconf:
+            def get_service_info(self, service_type, name, timeout=1000):
+                if "one" in name:
+                    return _FakeServiceInfo(b"\xc0\xa8\x01\x0a", port=554, properties={b"path": b"/stream1"})
+                return _FakeServiceInfo(b"\xc0\xa8\x01\x0b", port=8554, properties={b"path": b"/stream2"})
+
+            def close(self):
+                return None
+
+        class FakeServiceBrowser:
+            def __init__(self, zeroconf, service_type, listener):
+                listener.add_service(zeroconf, service_type, "camera-one._rtsp._tcp.local.")
+                listener.add_service(zeroconf, service_type, "camera-two._rtsp._tcp.local.")
+
+            def cancel(self):
+                return None
+
+        fake_zeroconf_module = types.SimpleNamespace(
+            ServiceBrowser=FakeServiceBrowser,
+            ServiceListener=FakeListener,
+            Zeroconf=FakeZeroconf,
+        )
+
+        with patch.dict("sys.modules", {"zeroconf": fake_zeroconf_module}):
+            cameras = camera_discovery.discover_rtsp_cameras(["_rtsp._tcp.local."], timeout_seconds=0.2)
+
+        self.assertEqual(len(cameras), 2)
+        self.assertEqual(cameras[0]["url"], "rtsp://192.168.1.10:554/stream1")
+        self.assertEqual(cameras[1]["url"], "rtsp://192.168.1.11:8554/stream2")
+
 
 if __name__ == "__main__":
     unittest.main()

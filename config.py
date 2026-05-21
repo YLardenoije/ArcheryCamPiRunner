@@ -5,8 +5,7 @@ import os
 UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
 
 # Network settings
-RTSP_URL = "rtsp://192.168.10.31:554/live/0/MAIN"
-# RTSP_URL = "rtsp://admin:admin@192.168.100.27:554/11"
+RTSP_URL = ""
 FLASK_PORT = 8080
 ENABLE_ZEROCONF_DISCOVERY = True
 ZEROCONF_DISCOVERY_TIMEOUT = 8.0

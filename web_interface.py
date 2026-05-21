@@ -15,11 +15,24 @@ INDEX_HTML = """
 body{font-family:Arial;margin:20px;}
 button{padding:10px 15px;margin:5px;}
 .file{margin:6px 0;}
+.camera-list{margin:6px 0;min-width:60ch;}
 </style>
 </head><body>
 <h1>Kiosk Controller</h1>
 <form action="/set_stream" method="get">
-  <label>RTSP URL: <input name="url" size="60" value="{{ current_url|e }}"></label>
+    <label>Camera: 
+        <select name="url" class="camera-list">
+        {% if cameras %}
+            {% for camera in cameras %}
+                <option value="{{ camera.url|e }}" {% if camera.url == current_url %}selected{% endif %}>
+                    {{ camera.name }} - {{ camera.url }}
+                </option>
+            {% endfor %}
+        {% else %}
+            <option value="" selected>No cameras discovered yet</option>
+        {% endif %}
+        </select>
+    </label>
   <button type="submit">Set Stream</button>
 </form>
 <p><a href="/show_stream"><button>Show Stream</button></a></p>
@@ -51,14 +64,21 @@ button{padding:10px 15px;margin:5px;}
 class WebInterface:
     """Flask web interface for controlling the kiosk."""
     
-    def __init__(self, gui, vlc_player, shutdown_callback, initial_rtsp_url=None):
+    def __init__(self, gui, vlc_player, shutdown_callback, initial_rtsp_url=None, initial_cameras=None):
         self.gui = gui
         self.vlc_player = vlc_player
         self.shutdown_callback = shutdown_callback
-        self.rtsp_url = initial_rtsp_url or config.RTSP_URL
+        self.camera_choices = list(initial_cameras or [])
+        self.rtsp_url = initial_rtsp_url or config.RTSP_URL or ""
         
         self.app = Flask(__name__)
         self._setup_routes()
+
+    def update_cameras(self, cameras, selected_url=None):
+        """Replace the available camera list and optionally select one."""
+        self.camera_choices = list(cameras or [])
+        if selected_url is not None:
+            self.rtsp_url = selected_url
     
     def _setup_routes(self):
         """Setup Flask routes."""
@@ -77,7 +97,12 @@ class WebInterface:
             f for f in os.listdir(config.UPLOAD_FOLDER)
             if f.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp"))
         ])
-        return render_template_string(INDEX_HTML, files=files, current_url=self.rtsp_url)
+        return render_template_string(
+            INDEX_HTML,
+            files=files,
+            current_url=self.rtsp_url,
+            cameras=self.camera_choices,
+        )
     
     def upload(self):
         """Handle file upload."""
@@ -113,6 +138,8 @@ class WebInterface:
     
     def show_stream(self):
         """Show the RTSP stream."""
+        if not self.rtsp_url:
+            return "No camera selected", 400
         self.gui.show_stream(self.rtsp_url)
         return redirect(url_for("index"))
     
@@ -127,6 +154,9 @@ class WebInterface:
         if not new_url:
             return "Missing url parameter", 400
         self.rtsp_url = new_url
+        for camera in self.camera_choices:
+            if camera.get("url") == new_url:
+                break
         # Restart VLC media safely in background
         def do_restart():
             try:

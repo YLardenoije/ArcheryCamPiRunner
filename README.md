@@ -46,11 +46,12 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
    ```
 
 4. **Configure the application:**
-   Edit `config.py` to set your RTSP stream URL and preferences:
+   Edit `config.py` to set your preferences:
    ```python
-   RTSP_URL = "rtsp://your-camera-ip:554/stream"
+   RTSP_URL = ""
    FLASK_PORT = 8080
    ```
+   The app discovers RTSP cameras via zeroconf on launch and fills the web UI dropdown with the available cameras.
 
 5. **(Optional) Setup Network Bridge:**
    If using a USB-to-LAN adapter (eth1) to extend network connectivity, bridge it with the built-in Ethernet (eth0):
@@ -71,7 +72,7 @@ python3 server3.py
 
 The application will:
 - Start in fullscreen kiosk mode
-- Begin streaming from the configured RTSP URL
+- Discover cameras on launch and begin streaming from the first discovered camera
 - Launch a web server on port 8080 (configurable)
 
 ### Web Interface
@@ -120,7 +121,7 @@ ArcheryCamPiRunner/
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `UPLOAD_FOLDER` | Directory for uploaded images | `~/kiosk_images` |
-| `RTSP_URL` | Default RTSP stream URL | `rtsp://192.168.10.31:554/live/0/MAIN` |
+| `RTSP_URL` | Default RTSP stream URL | `` |
 | `FLASK_PORT` | Web interface port | `8080` |
 | `ENABLE_ZEROCONF_DISCOVERY` | Discover RTSP camera on boot using mDNS | `True` |
 | `ZEROCONF_DISCOVERY_TIMEOUT` | Seconds to wait for discovery on boot | `8.0` |
@@ -128,14 +129,16 @@ ArcheryCamPiRunner/
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
 
-### Boot-Time Camera Discovery
+### Camera Discovery
 
-On startup, the app can auto-discover a camera via zeroconf and start that stream automatically.
+On startup, the app can auto-discover cameras via zeroconf and start the first discovered stream automatically.
 
-- If a camera is discovered within `ZEROCONF_DISCOVERY_TIMEOUT`, that URL is used.
-- If discovery times out or zeroconf is unavailable, the app falls back to `RTSP_URL`.
+- If cameras are discovered within `ZEROCONF_DISCOVERY_TIMEOUT`, the first URL is used and the rest appear in the dropdown.
+- If discovery times out or zeroconf is unavailable, the app starts without a stream until you select one.
 
 To disable discovery, set `ENABLE_ZEROCONF_DISCOVERY = False` in `config.py`.
+
+The web UI now shows a camera dropdown populated from discovered RTSP cameras.
 
 ## Development
 
@@ -172,6 +175,7 @@ coverage html  # Generate HTML report
 ### Update Script
 
 Use the included script to update the app from Git, reinstall dependencies, and restart the kiosk service.
+The updater now force-stops any existing kiosk instance with `kill.sh` before updating, then relaunches with `run.sh`.
 
 ```bash
 chmod +x update_app.sh
@@ -179,14 +183,11 @@ chmod +x update_app.sh
 ```
 
 The script installs dependencies into a local virtual environment (`.venv`) to avoid Raspberry Pi OS PEP 668 system-pip restrictions.
-If `kiosk.service` is not found, it falls back to `./run.sh` by default.
-When run as a non-root SSH user, service restart requires passwordless sudo; otherwise it also falls back to `./run.sh`.
+If you do not want it to restart automatically after updating, set `START_AFTER_UPDATE=0`.
 
 Optional environment variables:
-- `RESTART_SERVICE=0` to skip service restart
-- `SERVICE_NAME=my-kiosk.service` to restart a different systemd service
 - `VENV_DIR=/path/to/.venv` to use a custom virtualenv location
-- `FALLBACK_TO_RUN_SCRIPT=0` to disable automatic `run.sh` fallback
+- `START_AFTER_UPDATE=0` to skip the relaunch step after updating
 
 ### Run and Kill Scripts
 

@@ -5,7 +5,7 @@ import threading
 import tkinter as tk
 
 import config
-from camera_discovery import discover_rtsp_url
+from camera_discovery import discover_rtsp_cameras
 from vlc_player import VLCPlayer
 from gui import KioskGUI
 from web_interface import WebInterface
@@ -19,28 +19,24 @@ def shutdown(*args):
         pass
     root.destroy()
     sys.exit(0)
-
-
-def discover_camera_after_launch(gui, web, vlc_player):
-    """Discover a camera in the background after the kiosk has launched."""
-    if not config.ENABLE_ZEROCONF_DISCOVERY:
-        print("Zeroconf discovery disabled; using configured RTSP_URL")
-        return
-
-    discovered_url = discover_rtsp_url(
-        config.ZEROCONF_SERVICE_TYPES,
-        timeout_seconds=config.ZEROCONF_DISCOVERY_TIMEOUT,
-    )
-    if not discovered_url:
-        print("No zeroconf RTSP camera discovered after launch; keeping configured RTSP_URL")
-        return
-
-    print(f"Discovered RTSP camera via zeroconf after launch: {discovered_url}")
-    web.rtsp_url = discovered_url
-    gui.show_stream(discovered_url)
-
-
 if __name__ == "__main__":
+    discovered_cameras = []
+    if config.ENABLE_ZEROCONF_DISCOVERY:
+        discovered_cameras = discover_rtsp_cameras(
+            config.ZEROCONF_SERVICE_TYPES,
+            timeout_seconds=config.ZEROCONF_DISCOVERY_TIMEOUT,
+        )
+        if discovered_cameras:
+            print("Discovered RTSP cameras via zeroconf:")
+            for camera in discovered_cameras:
+                print(f" - {camera['name']}: {camera['url']}")
+        else:
+            print("No zeroconf RTSP cameras discovered on launch")
+    else:
+        print("Zeroconf discovery disabled")
+
+    boot_rtsp_url = discovered_cameras[0]["url"] if discovered_cameras else ""
+
     # Create Tkinter root window
     root = tk.Tk()
     
@@ -51,7 +47,13 @@ if __name__ == "__main__":
     gui = KioskGUI(root, vlc_player)
     
     # Initialize web interface
-    web = WebInterface(gui, vlc_player, shutdown, initial_rtsp_url=config.RTSP_URL)
+    web = WebInterface(
+        gui,
+        vlc_player,
+        shutdown,
+        initial_rtsp_url=boot_rtsp_url,
+        initial_cameras=discovered_cameras,
+    )
     
     # Setup signal handlers
     signal.signal(signal.SIGINT, shutdown)
@@ -62,17 +64,14 @@ if __name__ == "__main__":
     flask_thread.start()
     
     # Embed VLC and start streaming
-    root.after(100, lambda: (
-        gui.embed_vlc(),
-        vlc_player.start_media(config.RTSP_URL)
-    ))
+    def start_initial_stream():
+        gui.embed_vlc()
+        if boot_rtsp_url:
+            vlc_player.start_media(boot_rtsp_url)
+        else:
+            print("No discovered stream available at launch; waiting for a camera selection")
 
-    # Start zeroconf discovery after the kiosk is already live.
-    threading.Thread(
-        target=discover_camera_after_launch,
-        args=(gui, web, vlc_player),
-        daemon=True,
-    ).start()
+    root.after(100, start_initial_stream)
     
     # Start Tkinter main loop
     root.mainloop()

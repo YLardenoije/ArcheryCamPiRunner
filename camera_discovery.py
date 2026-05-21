@@ -94,3 +94,71 @@ def discover_rtsp_url(service_types, timeout_seconds=8.0):
             except Exception:
                 pass
         zeroconf.close()
+
+
+def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
+    """Discover RTSP cameras via zeroconf/mDNS.
+
+    Returns:
+        list[dict]: Ordered camera entries with name/url/service_type/host/port.
+    """
+    try:
+        from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
+    except Exception:
+        return []
+
+    cameras = []
+    seen_urls = set()
+    lock = threading.Lock()
+    done_event = threading.Event()
+
+    class _Listener(ServiceListener):
+        def _resolve(self, zeroconf, service_type, name):
+            info = zeroconf.get_service_info(service_type, name, timeout=1000)
+            if info is None:
+                return
+
+            url = _build_rtsp_url(info)
+            if not url:
+                return
+
+            with lock:
+                if url in seen_urls:
+                    return
+                seen_urls.add(url)
+                addresses = getattr(info, "addresses", None) or []
+                host = socket.inet_ntoa(addresses[0]) if addresses else ""
+                cameras.append(
+                    {
+                        "name": name,
+                        "url": url,
+                        "service_type": service_type,
+                        "host": host,
+                        "port": getattr(info, "port", 554) or 554,
+                    }
+                )
+
+        def add_service(self, zeroconf, service_type, name):
+            self._resolve(zeroconf, service_type, name)
+
+        def update_service(self, zeroconf, service_type, name):
+            self._resolve(zeroconf, service_type, name)
+
+        def remove_service(self, zeroconf, service_type, name):
+            return None
+
+    zeroconf = Zeroconf()
+    browsers = []
+    listener = _Listener()
+    try:
+        for service_type in service_types:
+            browsers.append(ServiceBrowser(zeroconf, service_type, listener))
+        done_event.wait(timeout=max(0.1, float(timeout_seconds)))
+        return cameras
+    finally:
+        for browser in browsers:
+            try:
+                browser.cancel()
+            except Exception:
+                pass
+        zeroconf.close()

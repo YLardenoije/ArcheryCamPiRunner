@@ -18,8 +18,8 @@ class TestConfig(unittest.TestCase):
         self.assertNotIn("~", config.UPLOAD_FOLDER)
     
     def test_rtsp_url_format(self):
-        """Test that RTSP URL is valid format."""
-        self.assertTrue(config.RTSP_URL.startswith("rtsp://"))
+        """Test that RTSP URL is no longer hardcoded."""
+        self.assertEqual(config.RTSP_URL, "")
     
     def test_flask_port_is_int(self):
         """Test that Flask port is an integer."""
