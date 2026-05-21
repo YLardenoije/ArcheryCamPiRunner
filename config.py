@@ -3,6 +3,7 @@ import os
 
 # Directories
 UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
+CAMERA_SETTINGS_FILE = os.path.expanduser("~/.archery_cam_camera_settings.json")
 
 # Network settings
 RTSP_URL = ""
@@ -40,6 +41,9 @@ RTSP_SCAN_PATH_CANDIDATES = [
 STREAM_WATCHDOG_ENABLED = True
 STREAM_WATCHDOG_INTERVAL_SECONDS = 5
 STREAM_WATCHDOG_FAILURE_THRESHOLD = 3
+ONVIF_USERNAME = ""
+ONVIF_PASSWORD = ""
+ONVIF_PORT = 80
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

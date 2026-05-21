@@ -6,11 +6,14 @@ import time
 import tkinter as tk
 
 import config
+from camera_control import apply_zoom_focus_onvif
+from camera_settings import CameraSettingsStore
 from camera_discovery import (
     discover_onvif_ws_cameras,
     discover_rtsp_cameras,
     discover_rtsp_port_scan_cameras,
     discover_rtsp_port_scan_cameras_multi,
+    resolve_mac_for_host,
 )
 from vlc_player import VLCPlayer
 from gui import KioskGUI
@@ -26,6 +29,7 @@ def shutdown(*args):
     root.destroy()
     sys.exit(0)
 if __name__ == "__main__":
+    settings_store = CameraSettingsStore(config.CAMERA_SETTINGS_FILE)
     discovered_cameras = []
     if config.ENABLE_ZEROCONF_DISCOVERY:
         print(
@@ -95,7 +99,21 @@ if __name__ == "__main__":
         if not config.ENABLE_ZEROCONF_DISCOVERY:
             print("Zeroconf discovery disabled")
 
-    boot_rtsp_url = discovered_cameras[0]["url"] if discovered_cameras else ""
+    for camera in discovered_cameras:
+        host = camera.get("host", "")
+        camera["mac"] = resolve_mac_for_host(host)
+
+    settings_store.apply_to_cameras(discovered_cameras)
+    startup_camera = settings_store.choose_startup_camera(discovered_cameras)
+    boot_rtsp_url = startup_camera.get("url", "") if startup_camera else ""
+
+    if startup_camera:
+        print(
+            "Startup camera selected:",
+            startup_camera.get("name", "camera"),
+            startup_camera.get("url", ""),
+            f"(role={startup_camera.get('role', 'none')}, mac={startup_camera.get('mac', '')})",
+        )
 
     # Create Tkinter root window
     root = tk.Tk()
@@ -113,6 +131,15 @@ if __name__ == "__main__":
         shutdown,
         initial_rtsp_url=boot_rtsp_url,
         initial_cameras=discovered_cameras,
+        settings_store=settings_store,
+        apply_ptz_fn=lambda camera, zoom, focus: apply_zoom_focus_onvif(
+            camera.get("host", ""),
+            zoom,
+            focus,
+            username=config.ONVIF_USERNAME,
+            password=config.ONVIF_PASSWORD,
+            port=config.ONVIF_PORT,
+        ),
     )
     
     # Setup signal handlers

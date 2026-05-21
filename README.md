@@ -10,6 +10,7 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 - **Kiosk Mode**: Fullscreen display with no window decorations
 - **Seamless Switching**: Switch between live stream and images
 - **Multi-Camera Support**: Change RTSP stream URLs on the fly
+- **Persistent Camera Settings**: Save camera name/role/PTZ settings by MAC address
 
 ## Requirements
 
@@ -136,6 +137,10 @@ ArcheryCamPiRunner/
 | `RTSP_SCAN_MAX_HOSTS` | Max hosts to probe during fallback scan | `254` |
 | `RTSP_SCAN_INTERFACE_HINT` | Interface to prefer for auto subnet selection | `eth0` |
 | `RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE` | Require RTSP OPTIONS response before listing a scanned host | `True` |
+| `CAMERA_SETTINGS_FILE` | JSON file storing per-camera name/role/PTZ settings keyed by MAC | `~/.archery_cam_camera_settings.json` |
+| `ONVIF_USERNAME` | Username for ONVIF PTZ commands | `` |
+| `ONVIF_PASSWORD` | Password for ONVIF PTZ commands | `` |
+| `ONVIF_PORT` | ONVIF service port | `80` |
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
 
@@ -154,6 +159,24 @@ On startup, the app can auto-discover cameras via zeroconf and start the first d
 To disable discovery, set `ENABLE_ZEROCONF_DISCOVERY = False` in `config.py`.
 
 The web UI now shows a camera dropdown populated from discovered RTSP cameras.
+
+### Camera Settings and Persistency
+
+The web UI includes a camera settings card for each discovered camera:
+
+- Rename camera (friendly display name)
+- Assign `Primary` or `Secondary` role
+- Set zoom/focus values and apply PTZ
+
+These settings are persisted by camera MAC address, so when the same camera is discovered later its settings are restored automatically.
+
+Startup stream selection uses this order:
+
+1. camera marked `primary`
+2. camera marked `secondary`
+3. first discovered camera (fallback)
+
+If a camera's MAC address is unavailable, it still appears and can be streamed, but settings cannot be persisted for that device.
 
 ## Development
 

@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 import os
 from io import BytesIO
+from camera_settings import CameraSettingsStore
 
 
 class TestWebInterface(unittest.TestCase):
@@ -44,6 +45,28 @@ class TestWebInterface(unittest.TestCase):
         """Helper to create web interface instance."""
         from web_interface import WebInterface
         return WebInterface(self.mock_gui, self.mock_vlc_player, self.mock_shutdown)
+
+    def _create_web_interface_with_settings(self, apply_ptz_fn=None):
+        """Helper to create web interface instance with persistent settings store."""
+        from web_interface import WebInterface
+
+        store_file = os.path.join(self.temp_dir, "camera_settings.json")
+        settings_store = CameraSettingsStore(store_file)
+        return WebInterface(
+            self.mock_gui,
+            self.mock_vlc_player,
+            self.mock_shutdown,
+            initial_cameras=[
+                {
+                    "name": "scan-cam",
+                    "url": "rtsp://192.168.100.198:554/live/0/MAIN",
+                    "host": "192.168.100.198",
+                    "mac": "aa:bb:cc:dd:ee:ff",
+                }
+            ],
+            settings_store=settings_store,
+            apply_ptz_fn=apply_ptz_fn,
+        )
     
     def test_web_interface_initialization(self):
         """Test web interface initializes correctly."""
@@ -246,6 +269,56 @@ class TestWebInterface(unittest.TestCase):
             
             # Should decode and find the file
             self.mock_gui.show_image.assert_called_once()
+
+    def test_camera_settings_persists_when_mac_present(self):
+        web = self._create_web_interface_with_settings()
+
+        form_data = {
+            "url": "rtsp://192.168.100.198:554/live/0/MAIN",
+            "name": "Lane 1",
+            "role": "primary",
+            "zoom": "0.5",
+            "focus": "-0.4",
+            "action": "save",
+        }
+        mock_form = MagicMock()
+        mock_form.get.side_effect = lambda key, default=None: form_data.get(key, default)
+
+        with patch("web_interface.request") as mock_request, patch("web_interface.redirect"):
+            mock_request.form = mock_form
+            web.camera_settings()
+
+        saved = web.settings_store.get_settings("aa:bb:cc:dd:ee:ff")
+        self.assertEqual(saved.get("name"), "Lane 1")
+        self.assertEqual(saved.get("role"), "primary")
+        self.assertEqual(saved.get("ptz", {}).get("zoom"), 0.5)
+        self.assertEqual(saved.get("ptz", {}).get("focus"), -0.4)
+
+    def test_camera_settings_apply_calls_ptz_handler(self):
+        applied = {"called": False}
+
+        def apply_fn(camera, zoom, focus):
+            applied["called"] = True
+            return True, "ok"
+
+        web = self._create_web_interface_with_settings(apply_ptz_fn=apply_fn)
+
+        form_data = {
+            "url": "rtsp://192.168.100.198:554/live/0/MAIN",
+            "name": "Lane 1",
+            "role": "secondary",
+            "zoom": "0.1",
+            "focus": "0.2",
+            "action": "apply",
+        }
+        mock_form = MagicMock()
+        mock_form.get.side_effect = lambda key, default=None: form_data.get(key, default)
+
+        with patch("web_interface.request") as mock_request, patch("web_interface.redirect"):
+            mock_request.form = mock_form
+            web.camera_settings()
+
+        self.assertTrue(applied["called"])
 
 
 if __name__ == "__main__":
