@@ -193,6 +193,21 @@ class TestCameraDiscovery(unittest.TestCase):
 
         self.assertEqual(url, "rtsp://192.168.1.88:554/stream1")
 
+    def test_discover_working_rtsp_url_auth_ambiguous_returns_base_url(self):
+        with patch(
+            "camera_discovery._probe_rtsp_path_status",
+            side_effect=[401, 401, 401],
+        ):
+            url = camera_discovery._discover_working_rtsp_url(
+                "192.168.1.88",
+                554,
+                default_path="/live/0/MAIN",
+                path_candidates=["/stream1", "/11"],
+                timeout_seconds=0.2,
+            )
+
+        self.assertEqual(url, "rtsp://192.168.1.88:554")
+
     def test_discover_rtsp_port_scan_uses_interface_hint_subnet(self):
         with patch("camera_discovery._interface_subnet_cidr", return_value="192.168.100.0/24"), patch(
             "camera_discovery._candidate_hosts", return_value=[]

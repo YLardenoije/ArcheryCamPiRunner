@@ -395,11 +395,22 @@ def _discover_working_rtsp_url(host, port, default_path="", path_candidates=None
     if not candidates:
         return _append_default_path_if_missing(f"rtsp://{host}:{int(port)}", default_path)
 
+    first_auth_path = ""
     for path in candidates:
         status = _probe_rtsp_path_status(host, port, path, timeout_seconds)
-        # 200: stream description available, 401/403: endpoint exists but requires auth.
-        if status in (200, 401, 403):
+        # 200: path is confirmed stream endpoint.
+        if status == 200:
             return f"rtsp://{host}:{int(port)}{path}"
+
+        # 401/403: endpoint may exist but can also be auth-gated globally.
+        if status in (401, 403) and not first_auth_path:
+            first_auth_path = path
+
+    if first_auth_path:
+        # Avoid locking onto a likely-wrong path when auth-gated responses are ambiguous.
+        if len(candidates) > 1:
+            return f"rtsp://{host}:{int(port)}"
+        return f"rtsp://{host}:{int(port)}{first_auth_path}"
 
     return _append_default_path_if_missing(f"rtsp://{host}:{int(port)}", default_path)
 
@@ -447,6 +458,7 @@ def discover_rtsp_port_scan_cameras(
         f"ports={ports}",
         f"handshake_required={require_rtsp_handshake}",
         f"connect_timeout={per_connect_timeout:.2f}s",
+        f"path_candidates={_normalize_rtsp_paths(default_path=default_path, path_candidates=path_candidates)}",
     )
 
     cameras = []

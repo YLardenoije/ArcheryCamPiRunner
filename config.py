@@ -20,7 +20,7 @@ ENABLE_DISCOVERY_FALLBACKS = True
 ONVIF_FALLBACK_TIMEOUT = 3.0
 RTSP_SCAN_FALLBACK_TIMEOUT = 4.0
 RTSP_SCAN_SUBNET = ""
-RTSP_SCAN_SUBNETS = []
+RTSP_SCAN_SUBNETS = ["192.168.100.0/24", "192.168.10.0/24"]
 RTSP_SCAN_PORTS = [554, 8554]
 RTSP_SCAN_MAX_HOSTS = 254
 RTSP_SCAN_INTERFACE_HINT = "eth0"
@@ -33,6 +33,9 @@ RTSP_SCAN_PATH_CANDIDATES = [
 	"/stream1",
 	"/cam/realmonitor?channel=1&subtype=0",
 	"/h264Preview_01_main",
+	"/h264/ch1/main/av_stream",
+	"/live/ch00_0",
+	"/11",
 ]
 
 # Display settings
