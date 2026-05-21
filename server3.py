@@ -132,7 +132,7 @@ if __name__ == "__main__":
         initial_rtsp_url=boot_rtsp_url,
         initial_cameras=discovered_cameras,
         settings_store=settings_store,
-        apply_ptz_fn=lambda camera, zoom, focus: apply_zoom_focus_onvif(
+        apply_ptz_fn=lambda camera, zoom, focus, **kwargs: apply_zoom_focus_onvif(
             camera.get("host", ""),
             zoom,
             focus,
@@ -142,6 +142,7 @@ if __name__ == "__main__":
             zoom_range_seconds=getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0),
             focus_range_seconds=getattr(config, "ONVIF_FULL_FOCUS_TIME_SECONDS", 3.0),
             zoom_in_speed=getattr(config, "ONVIF_ZOOM_IN_SPEED", 0.5),
+            **kwargs,
         ),
     )
     
