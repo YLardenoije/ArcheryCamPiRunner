@@ -141,7 +141,11 @@ if __name__ == "__main__":
             port=config.ONVIF_PORT,
             zoom_range_seconds=getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0),
             focus_range_seconds=getattr(config, "ONVIF_FULL_FOCUS_TIME_SECONDS", 3.0),
-            zoom_in_speed=getattr(config, "ONVIF_ZOOM_IN_SPEED", 0.5),
+            zoom_in_speed=getattr(config, "ONVIF_ZOOM_IN_SPEED", 1.0),
+            zoom_reset_seconds=getattr(config, "ONVIF_FULL_ZOOM_RESET_TIME_SECONDS", getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0)),
+            zoom_in_full_seconds=getattr(config, "ONVIF_FULL_ZOOM_IN_TIME_SECONDS", getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0)),
+            zoom_final_nudge_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_SECONDS", 0.0),
+            zoom_final_nudge_pause_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_PAUSE_SECONDS", 0.2),
             **kwargs,
         ),
     )
