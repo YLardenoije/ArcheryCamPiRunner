@@ -48,7 +48,7 @@ ONVIF_PORT = 80
 # Tune these to match your cameras' motor speed.
 ONVIF_FULL_ZOOM_TIME_SECONDS = 10.0
 ONVIF_FULL_FOCUS_TIME_SECONDS = 10.0
-ONVIF_ZOOM_IN_SPEED = 0.5   # zoom-in speed (0.0-1.0); lower = more accurate positioning
+ONVIF_ZOOM_IN_SPEED = 0.2   # zoom-in speed (0.0-1.0); lower = slower & more accurate positioning
 
 # Display settings
 FADE_DURATION = 1.0    # seconds
