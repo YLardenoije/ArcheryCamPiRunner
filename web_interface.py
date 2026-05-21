@@ -86,7 +86,9 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
                         <input type="number" class="ptz-num" id="ptz-zn-{{ loop.index }}"
                                      min="0" max="100" step="0.0001"
                                      value="{{ '%.4f'|format(camera.ptz.zoom * 100) }}"
-                                     oninput="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})">
+                                     oninput="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
+                                     onchange="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
+                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }}); return false;}">
                     </div>
                 </label>
                 <label>Focus &nbsp;<small>Near &#8592; &#8594; Far</small>
@@ -99,7 +101,9 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
                         <input type="number" class="ptz-num" id="ptz-fn-{{ loop.index }}"
                                      min="0" max="100" step="0.0001"
                                      value="{{ '%.4f'|format(camera.ptz.focus * 100) }}"
-                                     oninput="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})">
+                                     oninput="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
+                                     onchange="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})"
+                                     onkeydown="if(event.key==='Enter'){event.preventDefault(); var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }}); return false;}">
                     </div>
                 </label>
             </div>
