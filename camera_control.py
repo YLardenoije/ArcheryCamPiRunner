@@ -117,12 +117,14 @@ def apply_zoom_focus_onvif(
             zoom_move.ProfileToken = profile_token
             zoom_move.Velocity = {"PanTilt": {"x": 0.0, "y": 0.0}, "Zoom": {"x": -1.0}}
 
+            safe_zoom_in_speed = max(0.05, min(1.0, float(zoom_in_speed)))
             initial_pos = _try_get_zoom_pos(ptz_service, profile_token)
             print(f"PTZ: GetStatus initial zoom position={initial_pos}")
             use_feedback = initial_pos is not None
+            fallback_due_to_stuck_status = False
 
             if use_feedback:
-                # --- Feedback mode: move at full speed, stop when position sensor says so ---
+                # --- Feedback mode: stop on reported position, but detect stale status and bail out. ---
                 deadline = time.time() + float(zoom_range_seconds) * 2.5
                 print("PTZ: zoom out to wide end (feedback mode)...")
                 ptz_service.ContinuousMove(zoom_move)
@@ -138,26 +140,46 @@ def apply_zoom_focus_onvif(
                     deadline = time.time() + float(zoom_range_seconds) * 2.5
                     print(f"PTZ: zoom in to {zoom_value:.4f} (feedback mode)...")
                     ptz_service.ContinuousMove(zoom_move)
+
+                    stagnant_reads = 0
+                    last_pos = _try_get_zoom_pos(ptz_service, profile_token)
                     while time.time() < deadline:
                         pos = _try_get_zoom_pos(ptz_service, profile_token)
-                        if pos is None or pos >= zoom_value - 0.02:
+                        if pos is None:
+                            fallback_due_to_stuck_status = True
+                            print("PTZ: feedback aborted; GetStatus unavailable during move")
+                            break
+                        if pos >= zoom_value - 0.02:
+                            break
+
+                        if last_pos is not None and abs(pos - last_pos) < 0.001:
+                            stagnant_reads += 1
+                        else:
+                            stagnant_reads = 0
+                        last_pos = pos
+
+                        if stagnant_reads >= 10:
+                            fallback_due_to_stuck_status = True
+                            print("PTZ: feedback aborted; GetStatus appears stuck")
                             break
                         time.sleep(0.1)
                     ptz_service.Stop(stop_req)
 
                 final = _try_get_zoom_pos(ptz_service, profile_token)
                 print(f"PTZ: zoom positioning complete (feedback, final={final})")
-            else:
+
+            if (not use_feedback) or fallback_due_to_stuck_status:
                 # --- Timing fallback: zoom out for fixed time, then zoom in proportionally ---
                 print(f"PTZ: zoom reset — fully out at speed=1.0 ({zoom_range_seconds:.1f}s, timing fallback)")
+                zoom_move.Velocity["Zoom"]["x"] = -1.0
                 ptz_service.ContinuousMove(zoom_move)
                 time.sleep(float(zoom_range_seconds))
                 ptz_service.Stop(stop_req)
 
                 if zoom_value > 0.01:
-                    zoom_in_time = float(zoom_value) * float(zoom_range_seconds) / float(zoom_in_speed)
-                    zoom_move.Velocity["Zoom"]["x"] = float(zoom_in_speed)
-                    print(f"PTZ: zoom in {zoom_value:.4f} at speed {zoom_in_speed} ({zoom_in_time:.1f}s, timing fallback)")
+                    zoom_in_time = float(zoom_value) * float(zoom_range_seconds) / safe_zoom_in_speed
+                    zoom_move.Velocity["Zoom"]["x"] = safe_zoom_in_speed
+                    print(f"PTZ: zoom in {zoom_value:.4f} at speed {safe_zoom_in_speed} ({zoom_in_time:.1f}s, timing fallback)")
                     ptz_service.ContinuousMove(zoom_move)
                     time.sleep(zoom_in_time)
                     ptz_service.Stop(stop_req)
