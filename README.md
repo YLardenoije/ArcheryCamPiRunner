@@ -178,9 +178,12 @@ chmod +x update_app.sh
 ./update_app.sh
 ```
 
+The script installs dependencies into a local virtual environment (`.venv`) to avoid Raspberry Pi OS PEP 668 system-pip restrictions.
+
 Optional environment variables:
 - `RESTART_SERVICE=0` to skip service restart
 - `SERVICE_NAME=my-kiosk.service` to restart a different systemd service
+- `VENV_DIR=/path/to/.venv` to use a custom virtualenv location
 
 ### Run and Kill Scripts
 
@@ -196,6 +199,8 @@ Run in foreground:
 ```bash
 ./run.sh --foreground
 ```
+
+If `.venv/bin/python` exists, `run.sh` uses it automatically. You can override with `PYTHON_BIN=/path/to/python`.
 
 If graceful shutdown fails, use the fallback force-kill script:
 

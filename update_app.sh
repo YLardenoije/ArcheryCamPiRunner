@@ -3,6 +3,7 @@
 # Optional behavior is controlled by env vars:
 #   RESTART_SERVICE=1|0 (default: 1)
 #   SERVICE_NAME=<systemd service name> (default: kiosk.service)
+#   VENV_DIR=<virtualenv directory> (default: .venv)
 
 set -euo pipefail
 
@@ -10,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$SCRIPT_DIR}"
 RESTART_SERVICE="${RESTART_SERVICE:-1}"
 SERVICE_NAME="${SERVICE_NAME:-kiosk.service}"
+VENV_DIR="${VENV_DIR:-.venv}"
 
 cd "$REPO_DIR"
 
@@ -20,6 +22,11 @@ fi
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "python3 is required but not installed"
+    exit 1
+fi
+
+if ! python3 -m venv -h >/dev/null 2>&1; then
+    echo "python3 venv support is required. Install with: sudo apt-get install python3-venv"
     exit 1
 fi
 
@@ -39,8 +46,20 @@ echo "Updating branch: $BRANCH"
 git fetch origin "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
-echo "Installing/updating Python dependencies"
-python3 -m pip install -r requirements.txt
+echo "Ensuring virtual environment exists at $VENV_DIR"
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
+fi
+
+VENV_PYTHON="$VENV_DIR/bin/python"
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo "Virtualenv python not found at $VENV_PYTHON"
+    exit 1
+fi
+
+echo "Installing/updating Python dependencies in virtualenv"
+"$VENV_PYTHON" -m pip install --upgrade pip
+"$VENV_PYTHON" -m pip install -r requirements.txt
 
 if [ "$RESTART_SERVICE" = "1" ]; then
     if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${SERVICE_NAME}"; then

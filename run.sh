@@ -4,6 +4,10 @@
 # Usage:
 #   ./run.sh                # stop old instance, then launch in background
 #   ./run.sh --foreground   # stop old instance, then run in foreground
+#
+# Optional environment variables:
+#   PYTHON_BIN=<python executable>
+#   VENV_DIR=<virtualenv directory to prefer, default: .venv>
 
 set -euo pipefail
 
@@ -13,6 +17,20 @@ APP_ENTRY="server3.py"
 PID_FILE="$APP_DIR/.kiosk.pid"
 LOG_FILE="$APP_DIR/kiosk.log"
 STOP_TIMEOUT_SECONDS=15
+VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
+PYTHON_BIN="${PYTHON_BIN:-}"
+
+resolve_python_bin() {
+    if [ -n "$PYTHON_BIN" ]; then
+        return 0
+    fi
+
+    if [ -x "$VENV_DIR/bin/python" ]; then
+        PYTHON_BIN="$VENV_DIR/bin/python"
+    else
+        PYTHON_BIN="python3"
+    fi
+}
 
 is_running() {
     local pid="$1"
@@ -93,7 +111,7 @@ start_background() {
     echo "Starting $APP_ENTRY in background..."
 
     # Start in a dedicated session so we can stop all spawned processes as a group.
-    setsid python3 "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
+    setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
     local pid=$!
     echo "$pid" > "$PID_FILE"
 
@@ -104,7 +122,7 @@ start_background() {
 start_foreground() {
     cd "$APP_DIR"
     echo "Starting $APP_ENTRY in foreground..."
-    exec python3 "$APP_ENTRY"
+    exec "$PYTHON_BIN" "$APP_ENTRY"
 }
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -120,6 +138,13 @@ fi
 MODE="background"
 if [ "${1:-}" = "--foreground" ]; then
     MODE="foreground"
+fi
+
+resolve_python_bin
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    echo "Python executable not found: $PYTHON_BIN"
+    exit 1
 fi
 
 stop_existing_instances
