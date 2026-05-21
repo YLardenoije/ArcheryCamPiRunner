@@ -5,7 +5,7 @@ import threading
 import tkinter as tk
 
 import config
-from camera_discovery import discover_rtsp_cameras
+from camera_discovery import discover_onvif_ws_cameras, discover_rtsp_cameras, discover_rtsp_port_scan_cameras
 from vlc_player import VLCPlayer
 from gui import KioskGUI
 from web_interface import WebInterface
@@ -37,8 +37,33 @@ if __name__ == "__main__":
                 print(f" - {camera['name']}: {camera['url']}")
         else:
             print("No zeroconf RTSP cameras discovered on launch; check whether the cameras advertise mDNS/zeroconf services")
+
+    if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
+        print("Activating fallback 1/2: ONVIF WS-Discovery")
+        discovered_cameras = discover_onvif_ws_cameras(timeout_seconds=config.ONVIF_FALLBACK_TIMEOUT)
+        if discovered_cameras:
+            print("Discovered cameras via ONVIF WS-Discovery fallback:")
+            for camera in discovered_cameras:
+                print(f" - {camera['name']}: {camera['url']}")
+
+    if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
+        print("Activating fallback 2/2: RTSP subnet port scan")
+        discovered_cameras = discover_rtsp_port_scan_cameras(
+            subnet_cidr=config.RTSP_SCAN_SUBNET,
+            ports=config.RTSP_SCAN_PORTS,
+            timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+            max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+        )
+        if discovered_cameras:
+            print("Discovered cameras via RTSP scan fallback:")
+            for camera in discovered_cameras:
+                print(f" - {camera['name']}: {camera['url']}")
+
+    if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
+        print("No cameras found by zeroconf or fallback methods")
     else:
-        print("Zeroconf discovery disabled")
+        if not config.ENABLE_ZEROCONF_DISCOVERY:
+            print("Zeroconf discovery disabled")
 
     boot_rtsp_url = discovered_cameras[0]["url"] if discovered_cameras else ""
 

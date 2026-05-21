@@ -105,6 +105,63 @@ class TestCameraDiscovery(unittest.TestCase):
         self.assertEqual(cameras[0]["url"], "rtsp://192.168.1.10:554/stream1")
         self.assertEqual(cameras[1]["url"], "rtsp://192.168.1.11:8554/stream2")
 
+    def test_discover_onvif_ws_cameras(self):
+        class FakeSocket:
+            def __init__(self, *_args, **_kwargs):
+                self.responses = [
+                    (
+                        (
+                            b"<Envelope><Body><d:ProbeMatches>"
+                            b"<d:ProbeMatch><d:XAddrs>http://192.168.1.77/onvif/device_service</d:XAddrs>"
+                            b"</d:ProbeMatch></d:ProbeMatches></Body></Envelope>"
+                        ),
+                        ("192.168.1.77", 3702),
+                    )
+                ]
+
+            def setsockopt(self, *_args, **_kwargs):
+                return None
+
+            def settimeout(self, *_args, **_kwargs):
+                return None
+
+            def sendto(self, *_args, **_kwargs):
+                return None
+
+            def recvfrom(self, *_args, **_kwargs):
+                if self.responses:
+                    return self.responses.pop(0)
+                raise camera_discovery.socket.timeout()
+
+            def close(self):
+                return None
+
+        with patch("camera_discovery.socket.socket", return_value=FakeSocket()):
+            cameras = camera_discovery.discover_onvif_ws_cameras(timeout_seconds=0.2)
+
+        self.assertEqual(len(cameras), 1)
+        self.assertEqual(cameras[0]["url"], "rtsp://192.168.1.77:554")
+        self.assertEqual(cameras[0]["source"], "onvif-ws-discovery")
+
+    def test_discover_rtsp_port_scan_cameras(self):
+        hosts = ["192.168.1.10", "192.168.1.11", "192.168.1.12"]
+
+        def fake_open(host, port, _timeout):
+            return (host, port) in {("192.168.1.10", 554), ("192.168.1.12", 8554)}
+
+        with patch("camera_discovery._candidate_hosts", return_value=hosts), patch(
+            "camera_discovery._is_tcp_port_open", side_effect=fake_open
+        ):
+            cameras = camera_discovery.discover_rtsp_port_scan_cameras(
+                subnet_cidr="192.168.1.0/24",
+                ports=[554, 8554],
+                timeout_seconds=0.2,
+                max_hosts=3,
+            )
+
+        urls = sorted([c["url"] for c in cameras])
+        self.assertEqual(urls, ["rtsp://192.168.1.10:554", "rtsp://192.168.1.12:8554"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,12 @@ ZEROCONF_SERVICE_TYPES = [
 	"_camera._tcp.local.",
 	"_axis-video._tcp.local.",
 ]
+ENABLE_DISCOVERY_FALLBACKS = True
+ONVIF_FALLBACK_TIMEOUT = 3.0
+RTSP_SCAN_FALLBACK_TIMEOUT = 4.0
+RTSP_SCAN_SUBNET = ""
+RTSP_SCAN_PORTS = [554, 8554]
+RTSP_SCAN_MAX_HOSTS = 254
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

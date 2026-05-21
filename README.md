@@ -126,6 +126,12 @@ ArcheryCamPiRunner/
 | `ENABLE_ZEROCONF_DISCOVERY` | Discover RTSP camera on boot using mDNS | `True` |
 | `ZEROCONF_DISCOVERY_TIMEOUT` | Seconds to wait for discovery on boot | `8.0` |
 | `ZEROCONF_SERVICE_TYPES` | Zeroconf service types to browse | `[_rtsp._tcp.local.]` |
+| `ENABLE_DISCOVERY_FALLBACKS` | Enable fallback discovery when zeroconf finds nothing | `True` |
+| `ONVIF_FALLBACK_TIMEOUT` | Seconds for ONVIF WS-Discovery fallback | `3.0` |
+| `RTSP_SCAN_FALLBACK_TIMEOUT` | Seconds for RTSP port scan fallback | `4.0` |
+| `RTSP_SCAN_SUBNET` | CIDR subnet for RTSP fallback scan (empty = auto /24) | `` |
+| `RTSP_SCAN_PORTS` | RTSP ports to scan in fallback mode | `[554, 8554]` |
+| `RTSP_SCAN_MAX_HOSTS` | Max hosts to probe during fallback scan | `254` |
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
 
@@ -134,7 +140,10 @@ ArcheryCamPiRunner/
 On startup, the app can auto-discover cameras via zeroconf and start the first discovered stream automatically.
 
 - If cameras are discovered within `ZEROCONF_DISCOVERY_TIMEOUT`, the first URL is used and the rest appear in the dropdown.
-- If discovery times out or zeroconf is unavailable, the app starts without a stream until you select one.
+- If zeroconf returns no cameras, fallback discovery runs in order:
+   1. ONVIF WS-Discovery probe
+   2. RTSP subnet port scan
+- If all methods find nothing, the app starts without a stream until you select one.
 - Discovery scans several common camera service types, including RTSP, ONVIF, and Axis-style advertisements.
 
 To disable discovery, set `ENABLE_ZEROCONF_DISCOVERY = False` in `config.py`.

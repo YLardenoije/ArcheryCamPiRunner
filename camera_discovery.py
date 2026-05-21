@@ -1,5 +1,8 @@
 """Discover RTSP cameras via zeroconf/mDNS."""
 
+import concurrent.futures
+import ipaddress
+import re
 import socket
 import threading
 
@@ -171,3 +174,173 @@ def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
             except Exception:
                 pass
         zeroconf.close()
+
+
+def _extract_host_from_url(url):
+    """Extract host part from an HTTP/RTSP URL-like string."""
+    if not url:
+        return ""
+    match = re.match(r"^[a-zA-Z]+://([^/:]+)", url)
+    if not match:
+        return ""
+    return match.group(1)
+
+
+def discover_onvif_ws_cameras(timeout_seconds=4.0):
+    """Discover cameras via ONVIF WS-Discovery over multicast UDP.
+
+    Returns:
+        list[dict]: Camera entries with source='onvif-ws-discovery'.
+    """
+    message = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<e:Envelope xmlns:e=\"http://www.w3.org/2003/05/soap-envelope\" "
+        "xmlns:w=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
+        "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" "
+        "xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">"
+        "<e:Header>"
+        "<w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>"
+        "<w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>"
+        "</e:Header>"
+        "<e:Body>"
+        "<d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe>"
+        "</e:Body>"
+        "</e:Envelope>"
+    ).encode("utf-8")
+
+    cameras = []
+    seen = set()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        sock.settimeout(max(0.2, float(timeout_seconds) / 3.0))
+        sock.sendto(message, ("239.255.255.250", 3702))
+
+        while True:
+            try:
+                payload, _addr = sock.recvfrom(8192)
+            except socket.timeout:
+                break
+
+            text = payload.decode("utf-8", errors="ignore")
+            xaddrs = re.findall(r"<[^>]*XAddrs[^>]*>(.*?)</[^>]*XAddrs>", text, flags=re.IGNORECASE | re.DOTALL)
+            if not xaddrs:
+                continue
+
+            for field in xaddrs:
+                for token in field.split():
+                    host = _extract_host_from_url(token)
+                    if not host:
+                        continue
+                    rtsp_url = f"rtsp://{host}:554"
+                    if rtsp_url in seen:
+                        continue
+                    seen.add(rtsp_url)
+                    cameras.append(
+                        {
+                            "name": f"onvif-{host}",
+                            "url": rtsp_url,
+                            "service_type": "_onvif._tcp.local.",
+                            "host": host,
+                            "port": 554,
+                            "source": "onvif-ws-discovery",
+                        }
+                    )
+    except Exception:
+        return []
+    finally:
+        sock.close()
+
+    return cameras
+
+
+def _is_tcp_port_open(host, port, timeout_seconds):
+    """Return True when a TCP port is connectable within timeout."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=max(0.05, float(timeout_seconds))):
+            return True
+    except Exception:
+        return False
+
+
+def _candidate_hosts(subnet):
+    """Return host IPs from a subnet CIDR string."""
+    try:
+        network = ipaddress.ip_network(subnet, strict=False)
+    except Exception:
+        return []
+    return [str(ip) for ip in network.hosts()]
+
+
+def _auto_subnet_cidr():
+    """Best-effort detection of local /24 subnet from default route interface."""
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))
+        local_ip = probe.getsockname()[0]
+        probe.close()
+        octets = local_ip.split(".")
+        if len(octets) != 4:
+            return ""
+        return f"{octets[0]}.{octets[1]}.{octets[2]}.0/24"
+    except Exception:
+        return ""
+
+
+def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=4.0, max_hosts=254):
+    """Fallback discovery by scanning likely RTSP ports on local subnet.
+
+    Returns:
+        list[dict]: Camera entries with source='rtsp-port-scan'.
+    """
+    if ports is None:
+        ports = [554, 8554]
+
+    cidr = subnet_cidr or _auto_subnet_cidr()
+    if not cidr:
+        return []
+
+    hosts = _candidate_hosts(cidr)
+    if max_hosts > 0:
+        hosts = hosts[: int(max_hosts)]
+
+    cameras = []
+    seen_urls = set()
+    per_connect_timeout = max(0.05, float(timeout_seconds) / max(1, len(hosts)))
+
+    def _scan_target(host, port):
+        if _is_tcp_port_open(host, port, per_connect_timeout):
+            return host, int(port)
+        return None
+
+    futures = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as pool:
+        for host in hosts:
+            for port in ports:
+                futures.append(pool.submit(_scan_target, host, port))
+
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=max(1.0, float(timeout_seconds) * 2.0)):
+                result = future.result()
+                if not result:
+                    continue
+                host, port = result
+                url = f"rtsp://{host}:{port}"
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                cameras.append(
+                    {
+                        "name": f"scan-{host}:{port}",
+                        "url": url,
+                        "service_type": "_rtsp._tcp.scan",
+                        "host": host,
+                        "port": port,
+                        "source": "rtsp-port-scan",
+                    }
+                )
+        except concurrent.futures.TimeoutError:
+            # Keep cameras discovered so far when scan time budget is exceeded.
+            pass
+
+    return cameras
