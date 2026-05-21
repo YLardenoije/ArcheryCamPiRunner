@@ -277,8 +277,8 @@ class TestWebInterface(unittest.TestCase):
             "url": "rtsp://192.168.100.198:554/live/0/MAIN",
             "name": "Lane 1",
             "role": "primary",
-            "zoom": "0.5",
-            "focus": "0.6",
+            "zoom": "50",
+            "focus": "60",
             "action": "save",
         }
         mock_form = MagicMock()
@@ -307,8 +307,8 @@ class TestWebInterface(unittest.TestCase):
             "url": "rtsp://192.168.100.198:554/live/0/MAIN",
             "name": "Lane 1",
             "role": "secondary",
-            "zoom": "0.1",
-            "focus": "0.2",
+            "zoom": "10",
+            "focus": "20",
             "action": "apply",
         }
         mock_form = MagicMock()

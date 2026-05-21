@@ -13,7 +13,7 @@ INDEX_HTML = """
 <html><head><title>Kiosk Control</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:Arial;margin:20px;max-width:900px;}
+body{font-family:Arial;margin:20px;}
 button{padding:8px 14px;margin:4px;cursor:pointer;}
 .file{margin:6px 0;}
 .camera-list{margin:6px 0;min-width:40ch;}
@@ -24,9 +24,10 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
 .ptz-section{margin-top:10px;padding:10px;background:#eef2ff;border-radius:6px;}
 .ptz-section h4{margin:0 0 6px 0;font-size:0.95rem;color:#224;}
 .ptz-hint{font-size:0.78rem;color:#668;margin-bottom:8px;}
-.slider-row{display:flex;align-items:center;gap:10px;margin:4px 0;}
-.slider-row input[type=range]{flex:1;min-width:160px;}
-.slider-row output{min-width:3.2em;font-family:monospace;font-size:0.9rem;}
+.slider-row{display:flex;align-items:center;gap:10px;margin:4px 0;width:100%;box-sizing:border-box;}
+.slider-row input[type=range]{flex:1;width:100%;}
+.slider-row output{display:none;}
+.ptz-num{width:7em;font-family:monospace;font-size:0.9rem;padding:2px 4px;text-align:right;}
 .ptz-status{font-size:0.85rem;margin-left:8px;vertical-align:middle;}
 </style>
 </head><body>
@@ -77,20 +78,28 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
                 <div class="ptz-hint">Sliders apply to the camera when you stop moving them (~1s delay). The camera zooms fully out then in — this takes several seconds per adjustment. Click Save to persist.</div>
                 <label>Zoom &nbsp;<small>Wide &#8592; &#8594; Tele</small>
                     <div class="slider-row">
-                        <input type="range" name="zoom" min="0" max="1" step="0.01"
-                                     value="{{ '%.2f'|format(camera.ptz.zoom) }}"
-                                     oninput="this.nextElementSibling.value=parseFloat(this.value).toFixed(2);ptzSliderChange(this,{{ loop.index }})"
+                        <input type="range" name="zoom" min="0" max="100" step="0.0001"
+                                     value="{{ '%.4f'|format(camera.ptz.zoom * 100) }}"
+                                     id="ptz-z-{{ loop.index }}"
+                                     oninput="document.getElementById('ptz-zn-{{ loop.index }}').value=parseFloat(this.value).toFixed(4);ptzSliderChange(this,{{ loop.index }})"
                                      data-camera-url="{{ camera.url|e }}">
-                        <output>{{ '%.2f'|format(camera.ptz.zoom) }}</output>
+                        <input type="number" class="ptz-num" id="ptz-zn-{{ loop.index }}"
+                                     min="0" max="100" step="0.0001"
+                                     value="{{ '%.4f'|format(camera.ptz.zoom * 100) }}"
+                                     oninput="var s=document.getElementById('ptz-z-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})">
                     </div>
                 </label>
                 <label>Focus &nbsp;<small>Near &#8592; &#8594; Far</small>
                     <div class="slider-row">
-                        <input type="range" name="focus" min="0" max="1" step="0.01"
-                                     value="{{ '%.2f'|format(camera.ptz.focus) }}"
-                                     oninput="this.nextElementSibling.value=parseFloat(this.value).toFixed(2);ptzSliderChange(this,{{ loop.index }})"
+                        <input type="range" name="focus" min="0" max="100" step="0.0001"
+                                     value="{{ '%.4f'|format(camera.ptz.focus * 100) }}"
+                                     id="ptz-f-{{ loop.index }}"
+                                     oninput="document.getElementById('ptz-fn-{{ loop.index }}').value=parseFloat(this.value).toFixed(4);ptzSliderChange(this,{{ loop.index }})"
                                      data-camera-url="{{ camera.url|e }}">
-                        <output>{{ '%.2f'|format(camera.ptz.focus) }}</output>
+                        <input type="number" class="ptz-num" id="ptz-fn-{{ loop.index }}"
+                                     min="0" max="100" step="0.0001"
+                                     value="{{ '%.4f'|format(camera.ptz.focus * 100) }}"
+                                     oninput="var s=document.getElementById('ptz-f-{{ loop.index }}');s.value=this.value;ptzSliderChange(s,{{ loop.index }})">
                     </div>
                 </label>
             </div>
@@ -130,8 +139,8 @@ function ptzSliderChange(slider, idx) {
         const url = card.dataset.url;
         clearTimeout(_ptzTimers[url]);
         _ptzTimers[url] = setTimeout(function() {
-                const zoom  = parseFloat(card.querySelector('[name="zoom"]').value);
-                const focus = parseFloat(card.querySelector('[name="focus"]').value);
+                const zoom  = parseFloat(card.querySelector('[name="zoom"]').value)  / 100.0;
+                const focus = parseFloat(card.querySelector('[name="focus"]').value) / 100.0;
                 const statusEl = document.getElementById('ptz-status-' + idx);
                 if (statusEl) { statusEl.textContent = ' Applying\u2026'; statusEl.style.color = '#a60'; }
                 fetch('/ptz_live', {
@@ -362,8 +371,8 @@ class WebInterface:
         friendly_name = (request.form.get("name") or "").strip()
         role = (request.form.get("role") or "none").strip().lower()
         action = (request.form.get("action") or "save").strip().lower()
-        zoom = self._clamp_unit(request.form.get("zoom", 0.0), 0.0)
-        focus = self._clamp_unit(request.form.get("focus", 0.0), 0.0)
+        zoom  = self._clamp_unit(float(request.form.get("zoom",  "0") or "0") / 100.0, 0.0)
+        focus = self._clamp_unit(float(request.form.get("focus", "0") or "0") / 100.0, 0.0)
 
         camera["name"] = friendly_name or camera.get("name", "camera")
         camera["role"] = role if role in ("primary", "secondary") else ""
