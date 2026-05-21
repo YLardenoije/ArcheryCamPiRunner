@@ -64,15 +64,27 @@ echo "Installing/updating Python dependencies in virtualenv"
 "$VENV_PYTHON" -m pip install -r requirements.txt
 
 if [ "$RESTART_SERVICE" = "1" ]; then
+    restart_done=0
     if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${SERVICE_NAME}"; then
         echo "Restarting service: $SERVICE_NAME"
         if [ "$EUID" -eq 0 ]; then
-            systemctl restart "$SERVICE_NAME"
+            if systemctl restart "$SERVICE_NAME"; then
+                restart_done=1
+            else
+                echo "Service restart failed as root."
+            fi
         else
-            sudo systemctl restart "$SERVICE_NAME"
+            if command -v sudo >/dev/null 2>&1 && sudo -n systemctl restart "$SERVICE_NAME"; then
+                restart_done=1
+            else
+                echo "Service restart not permitted for non-root user without passwordless sudo."
+            fi
         fi
     else
         echo "Service $SERVICE_NAME not found."
+    fi
+
+    if [ "$restart_done" -eq 0 ]; then
         if [ "$FALLBACK_TO_RUN_SCRIPT" = "1" ] && [ -x "./run.sh" ]; then
             echo "Falling back to ./run.sh"
             ./run.sh

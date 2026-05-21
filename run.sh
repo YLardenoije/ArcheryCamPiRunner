@@ -21,6 +21,8 @@ VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 DISPLAY_VALUE="${DISPLAY:-:0}"
 XAUTHORITY_VALUE="${XAUTHORITY:-$HOME/.Xauthority}"
+WAYLAND_DISPLAY_VALUE="${WAYLAND_DISPLAY:-}"
+XDG_RUNTIME_DIR_VALUE="${XDG_RUNTIME_DIR:-}"
 
 resolve_python_bin() {
     if [ -n "$PYTHON_BIN" ]; then
@@ -113,6 +115,9 @@ start_background() {
     echo "Starting $APP_ENTRY in background..."
     echo "Using python: $PYTHON_BIN"
     echo "DISPLAY=$DISPLAY_VALUE"
+    if [ -n "$WAYLAND_DISPLAY_VALUE" ]; then
+        echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY_VALUE"
+    fi
 
     if [ -f "$XAUTHORITY_VALUE" ]; then
         echo "XAUTHORITY=$XAUTHORITY_VALUE"
@@ -121,7 +126,11 @@ start_background() {
     fi
 
     # Start in a dedicated session so we can stop all spawned processes as a group.
-    DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
+    if [ -n "$WAYLAND_DISPLAY_VALUE" ] || [ -n "$XDG_RUNTIME_DIR_VALUE" ]; then
+        DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" WAYLAND_DISPLAY="$WAYLAND_DISPLAY_VALUE" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR_VALUE" setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
+    else
+        DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
+    fi
     local pid=$!
     echo "$pid" > "$PID_FILE"
 
@@ -143,12 +152,19 @@ start_foreground() {
     echo "Starting $APP_ENTRY in foreground..."
     echo "Using python: $PYTHON_BIN"
     echo "DISPLAY=$DISPLAY_VALUE"
+    if [ -n "$WAYLAND_DISPLAY_VALUE" ]; then
+        echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY_VALUE"
+    fi
     if [ -f "$XAUTHORITY_VALUE" ]; then
         echo "XAUTHORITY=$XAUTHORITY_VALUE"
     else
         echo "XAUTHORITY file not found at $XAUTHORITY_VALUE (GUI startup may fail)"
     fi
-    exec DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" "$PYTHON_BIN" "$APP_ENTRY"
+    if [ -n "$WAYLAND_DISPLAY_VALUE" ] || [ -n "$XDG_RUNTIME_DIR_VALUE" ]; then
+        exec env DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" WAYLAND_DISPLAY="$WAYLAND_DISPLAY_VALUE" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR_VALUE" "$PYTHON_BIN" "$APP_ENTRY"
+    else
+        exec env DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" "$PYTHON_BIN" "$APP_ENTRY"
+    fi
 }
 
 if ! command -v python3 >/dev/null 2>&1; then

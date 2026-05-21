@@ -180,6 +180,7 @@ chmod +x update_app.sh
 
 The script installs dependencies into a local virtual environment (`.venv`) to avoid Raspberry Pi OS PEP 668 system-pip restrictions.
 If `kiosk.service` is not found, it falls back to `./run.sh` by default.
+When run as a non-root SSH user, service restart requires passwordless sudo; otherwise it also falls back to `./run.sh`.
 
 Optional environment variables:
 - `RESTART_SERVICE=0` to skip service restart
@@ -205,6 +206,7 @@ Run in foreground:
 If `.venv/bin/python` exists, `run.sh` uses it automatically. You can override with `PYTHON_BIN=/path/to/python`.
 
 `run.sh` also exports `DISPLAY` (default `:0`) and `XAUTHORITY` (default `$HOME/.Xauthority`) to improve Tkinter kiosk startup from non-desktop shells.
+On Wayland systems, it also passes through `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` when available.
 
 If graceful shutdown fails, use the fallback force-kill script:
 
