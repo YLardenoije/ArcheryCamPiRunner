@@ -146,6 +146,7 @@ if __name__ == "__main__":
             zoom_in_full_seconds=getattr(config, "ONVIF_FULL_ZOOM_IN_TIME_SECONDS", getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0)),
             zoom_final_nudge_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_SECONDS", 0.0),
             zoom_final_nudge_pause_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_PAUSE_SECONDS", 0.2),
+            use_status_feedback=getattr(config, "ONVIF_USE_STATUS_FEEDBACK", True),
             **kwargs,
         ),
     )

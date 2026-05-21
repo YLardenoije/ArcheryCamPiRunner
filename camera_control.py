@@ -41,6 +41,7 @@ def apply_zoom_focus_onvif(
     zoom_in_full_seconds=None,
     zoom_final_nudge_seconds=0.0,
     zoom_final_nudge_pause_seconds=0.2,
+    use_status_feedback=True,
     apply_zoom=True,
     apply_focus=True,
     **_ignored,
@@ -130,7 +131,9 @@ def apply_zoom_focus_onvif(
             initial_pos = _try_get_zoom_pos(ptz_service, profile_token)
             print(f"PTZ: GetStatus initial zoom position={initial_pos}")
             host_key = f"{host}:{try_port}"
-            if host_key in _UNRELIABLE_STATUS_HOSTS:
+            if (not use_status_feedback) or (host_key in _UNRELIABLE_STATUS_HOSTS):
+                if not use_status_feedback:
+                    print("PTZ: status-feedback disabled by configuration; using timing mode")
                 print(f"PTZ: GetStatus previously marked unreliable for {host_key}; skipping feedback mode")
                 use_feedback = False
             else:
@@ -203,7 +206,8 @@ def apply_zoom_focus_onvif(
                             time.sleep(coarse_time)
                             ptz_service.Stop(stop_req)
 
-                        actual_nudge = min(nudge_seconds, target_time)
+                        # Keep nudge proportional for very small zoom targets.
+                        actual_nudge = min(nudge_seconds, target_time, target_time * 0.25)
                         if actual_nudge > 0.0:
                             if nudge_pause_seconds > 0.0:
                                 time.sleep(nudge_pause_seconds)
