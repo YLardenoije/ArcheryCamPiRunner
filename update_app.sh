@@ -1,19 +1,15 @@
 #!/bin/bash
 # Update ArcheryCamPiRunner from git and refresh dependencies.
 # Optional behavior is controlled by env vars:
-#   RESTART_SERVICE=1|0 (default: 1)
-#   SERVICE_NAME=<systemd service name> (default: kiosk.service)
 #   VENV_DIR=<virtualenv directory> (default: .venv)
-#   FALLBACK_TO_RUN_SCRIPT=1|0 (default: 1)
+#   START_AFTER_UPDATE=1|0 (default: 1)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$SCRIPT_DIR}"
-RESTART_SERVICE="${RESTART_SERVICE:-1}"
-SERVICE_NAME="${SERVICE_NAME:-kiosk.service}"
 VENV_DIR="${VENV_DIR:-.venv}"
-FALLBACK_TO_RUN_SCRIPT="${FALLBACK_TO_RUN_SCRIPT:-1}"
+START_AFTER_UPDATE="${START_AFTER_UPDATE:-1}"
 
 cd "$REPO_DIR"
 
@@ -42,6 +38,11 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     exit 1
 fi
 
+if [ -x "./kill.sh" ]; then
+    echo "Stopping any existing kiosk instance with kill.sh"
+    ./kill.sh
+fi
+
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 echo "Updating branch: $BRANCH"
 
@@ -63,37 +64,15 @@ echo "Installing/updating Python dependencies in virtualenv"
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install -r requirements.txt
 
-if [ "$RESTART_SERVICE" = "1" ]; then
-    restart_done=0
-    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${SERVICE_NAME}"; then
-        echo "Restarting service: $SERVICE_NAME"
-        if [ "$EUID" -eq 0 ]; then
-            if systemctl restart "$SERVICE_NAME"; then
-                restart_done=1
-            else
-                echo "Service restart failed as root."
-            fi
-        else
-            if command -v sudo >/dev/null 2>&1 && sudo -n systemctl restart "$SERVICE_NAME"; then
-                restart_done=1
-            else
-                echo "Service restart not permitted for non-root user without passwordless sudo."
-            fi
-        fi
+if [ "$START_AFTER_UPDATE" = "1" ]; then
+    if [ -x "./run.sh" ]; then
+        echo "Starting kiosk with run.sh"
+        ./run.sh
     else
-        echo "Service $SERVICE_NAME not found."
-    fi
-
-    if [ "$restart_done" -eq 0 ]; then
-        if [ "$FALLBACK_TO_RUN_SCRIPT" = "1" ] && [ -x "./run.sh" ]; then
-            echo "Falling back to ./run.sh"
-            ./run.sh
-        else
-            echo "Skipping restart."
-        fi
+        echo "run.sh not found or not executable. Skipping restart."
     fi
 else
-    echo "Service restart disabled (RESTART_SERVICE=$RESTART_SERVICE)"
+    echo "Post-update start disabled (START_AFTER_UPDATE=$START_AFTER_UPDATE)"
 fi
 
 echo "Update complete."
