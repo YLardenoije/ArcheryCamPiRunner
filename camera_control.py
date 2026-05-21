@@ -15,9 +15,11 @@ def _connect_onvif(ONVIFCamera, host, port, username, password):
 
 
 def apply_zoom_focus_onvif(host, zoom_value, focus_value, username="", password="", port=80):
-    """Best-effort ONVIF zoom/focus command.
+    """Best-effort ONVIF absolute zoom/focus command.
 
-    zoom_value and focus_value are expected in [-1.0, 1.0].
+    zoom_value and focus_value are expected in [0.0, 1.0] (absolute position).
+    zoom  0.0 = widest / 1.0 = most zoomed in.
+    focus 0.0 = nearest  / 1.0 = farthest (infinity).
     Returns (success: bool, message: str).
     """
     print(f"PTZ: apply_zoom_focus_onvif host={host!r} port={port} zoom={zoom_value} focus={focus_value} has_creds={bool(username and password)}")
@@ -75,23 +77,14 @@ def apply_zoom_focus_onvif(host, zoom_value, focus_value, username="", password=
         profile_token = profile.token
         print(f"PTZ: using profile token={profile_token!r}")
 
-        move_request = ptz_service.create_type("ContinuousMove")
+        # AbsoluteMove to an absolute zoom position (0=wide, 1=tele).
+        # PanTilt is intentionally omitted so only zoom is changed.
+        move_request = ptz_service.create_type("AbsoluteMove")
         move_request.ProfileToken = profile_token
-        move_request.Velocity = {
-            "PanTilt": {"x": 0.0, "y": 0.0},
-            "Zoom": {"x": float(zoom_value)},
-        }
-        print(f"PTZ: sending ContinuousMove zoom={zoom_value}")
-        ptz_service.ContinuousMove(move_request)
-        time.sleep(0.3)
-
-        stop_request = ptz_service.create_type("Stop")
-        stop_request.ProfileToken = profile_token
-        stop_request.PanTilt = True
-        stop_request.Zoom = True
-        print("PTZ: sending Stop (zoom)")
-        ptz_service.Stop(stop_request)
-        print("PTZ: zoom command complete")
+        move_request.Position = {"Zoom": {"x": float(zoom_value)}}
+        print(f"PTZ: sending AbsoluteMove zoom={zoom_value:.3f}")
+        ptz_service.AbsoluteMove(move_request)
+        print("PTZ: zoom command sent (AbsoluteMove, no Stop needed)")
 
         try:
             print("PTZ: creating imaging service for focus")
@@ -100,12 +93,11 @@ def apply_zoom_focus_onvif(host, zoom_value, focus_value, username="", password=
             print(f"PTZ: imaging source token={source_token!r}")
             focus_move = imaging_service.create_type("Move")
             focus_move.VideoSourceToken = source_token
-            focus_move.Focus = {"Continuous": {"Speed": float(focus_value)}}
-            print(f"PTZ: sending focus Move speed={focus_value}")
+            focus_move.Focus = {"Absolute": {"Position": float(focus_value), "Speed": 1.0}}
+            print(f"PTZ: sending focus AbsoluteMove position={focus_value:.3f}")
             imaging_service.Move(focus_move)
-            time.sleep(0.2)
-            imaging_service.Stop({"VideoSourceToken": source_token, "Focus": True})
-            print("PTZ: focus command complete")
+            time.sleep(1.0)  # absolute focus needs travel time; no explicit Stop required
+            print("PTZ: focus command sent")
         except Exception as focus_exc:
             print(f"PTZ: focus control skipped (optional, not supported by this camera): {focus_exc}")
 

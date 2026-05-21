@@ -278,7 +278,7 @@ class TestWebInterface(unittest.TestCase):
             "name": "Lane 1",
             "role": "primary",
             "zoom": "0.5",
-            "focus": "-0.4",
+            "focus": "0.6",
             "action": "save",
         }
         mock_form = MagicMock()
@@ -292,7 +292,7 @@ class TestWebInterface(unittest.TestCase):
         self.assertEqual(saved.get("name"), "Lane 1")
         self.assertEqual(saved.get("role"), "primary")
         self.assertEqual(saved.get("ptz", {}).get("zoom"), 0.5)
-        self.assertEqual(saved.get("ptz", {}).get("focus"), -0.4)
+        self.assertEqual(saved.get("ptz", {}).get("focus"), 0.6)
 
     def test_camera_settings_apply_calls_ptz_handler(self):
         applied = {"called": False}
