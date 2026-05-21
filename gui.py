@@ -97,6 +97,7 @@ class KioskGUI:
     def _fade_and_show_image(self, path):
         """Show image immediately (no fade)."""
         print("GUI: showing image immediately:", path)
+        self._showing_image = True
         # Stop player first to remove overlay quickly
         self.vlc_player.stop()
         try:
@@ -118,6 +119,7 @@ class KioskGUI:
     def _fade_and_show_stream(self, rtsp_url):
         """Show stream immediately (no fade)."""
         print("GUI: switching back to stream")
+        self._showing_image = False
         # Remove image
         self.image_label.config(image="")
         self.image_label.lower()
@@ -146,3 +148,8 @@ class KioskGUI:
         """Embed VLC player into the video container."""
         win_id = self.get_video_container_id()
         self.vlc_player.embed_to_window(win_id)
+
+    @property
+    def is_showing_image(self):
+        """Return True when the GUI is currently showing a static image."""
+        return bool(self._showing_image)

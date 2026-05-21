@@ -2,6 +2,7 @@
 import sys
 import signal
 import threading
+import time
 import tkinter as tk
 
 import config
@@ -121,6 +122,91 @@ if __name__ == "__main__":
     # Start Flask in background thread
     flask_thread = threading.Thread(target=web.run, daemon=True)
     flask_thread.start()
+
+    watchdog_state = {
+        "consecutive_failures": 0,
+        "restart_in_progress": False,
+        "last_restart_ts": 0.0,
+    }
+
+    def _current_stream_url():
+        return (getattr(web, "rtsp_url", "") or "").strip()
+
+    def _restart_stream_async(reason):
+        url = _current_stream_url()
+        if not url:
+            return
+
+        if watchdog_state["restart_in_progress"]:
+            return
+
+        watchdog_state["restart_in_progress"] = True
+
+        def _do_restart():
+            try:
+                print(f"Watchdog: restarting stream ({reason}) -> {url}")
+                try:
+                    vlc_player.stop()
+                except Exception:
+                    pass
+                time.sleep(0.3)
+                win_id = gui.get_video_container_id()
+                vlc_player.embed_to_window(win_id)
+                vlc_player.start_media(url)
+                watchdog_state["last_restart_ts"] = time.time()
+                watchdog_state["consecutive_failures"] = 0
+            except Exception as exc:
+                print("Watchdog: restart failed:", exc)
+            finally:
+                watchdog_state["restart_in_progress"] = False
+
+        threading.Thread(target=_do_restart, daemon=True).start()
+
+    def _watchdog_tick():
+        if not getattr(config, "STREAM_WATCHDOG_ENABLED", True):
+            return
+
+        interval_ms = max(1000, int(float(getattr(config, "STREAM_WATCHDOG_INTERVAL_SECONDS", 5)) * 1000))
+        threshold = max(1, int(getattr(config, "STREAM_WATCHDOG_FAILURE_THRESHOLD", 3)))
+        root.after(interval_ms, _watchdog_tick)
+
+        if gui.is_showing_image:
+            watchdog_state["consecutive_failures"] = 0
+            return
+
+        url = _current_stream_url()
+        if not url:
+            watchdog_state["consecutive_failures"] = 0
+            return
+
+        try:
+            state = vlc_player.player.get_state()
+        except Exception as exc:
+            print("Watchdog: failed to read VLC state:", exc)
+            watchdog_state["consecutive_failures"] += 1
+            if watchdog_state["consecutive_failures"] >= threshold:
+                _restart_stream_async("state-unavailable")
+            return
+
+        state_text = str(state).lower()
+        if "playing" in state_text or "opening" in state_text or "buffering" in state_text:
+            watchdog_state["consecutive_failures"] = 0
+            return
+
+        if "error" in state_text or "ended" in state_text or "stopped" in state_text:
+            watchdog_state["consecutive_failures"] += 1
+            print(
+                "Watchdog: unhealthy VLC state",
+                state,
+                f"({watchdog_state['consecutive_failures']}/{threshold})",
+            )
+            if watchdog_state["consecutive_failures"] >= threshold:
+                _restart_stream_async(f"state={state}")
+        else:
+            # Unknown/idle states are tolerated briefly.
+            watchdog_state["consecutive_failures"] += 1
+            if watchdog_state["consecutive_failures"] >= threshold:
+                _restart_stream_async(f"unknown-state={state}")
     
     # Embed VLC and start streaming
     def start_initial_stream():
@@ -131,6 +217,7 @@ if __name__ == "__main__":
             print("No discovered stream available at launch; waiting for a camera selection")
 
     root.after(100, start_initial_stream)
+    root.after(max(1000, int(float(getattr(config, "STREAM_WATCHDOG_INTERVAL_SECONDS", 5)) * 1000)), _watchdog_tick)
     
     # Start Tkinter main loop
     root.mainloop()

@@ -15,9 +15,29 @@ class VLCPlayer:
     def _create_instance(self):
         """Create a VLC instance with fallbacks."""
         candidates = [
-            ["--no-audio", "--rtsp-tcp", "--no-osd", "--no-sub-autodetect-file", "--avcodec-hw=drm"],
-            ["--no-audio", "--rtsp-tcp", "--no-osd", "--no-sub-autodetect-file"],
-            ["--no-audio", "--rtsp-tcp", "--no-osd", "--no-sub-autodetect-file", "--vout=gl"],
+            [
+                "--no-audio",
+                "--rtsp-tcp",
+                "--no-osd",
+                "--no-sub-autodetect-file",
+                "--network-caching=300",
+                "--avcodec-hw=drm",
+            ],
+            [
+                "--no-audio",
+                "--rtsp-tcp",
+                "--no-osd",
+                "--no-sub-autodetect-file",
+                "--network-caching=300",
+            ],
+            [
+                "--no-audio",
+                "--rtsp-tcp",
+                "--no-osd",
+                "--no-sub-autodetect-file",
+                "--network-caching=300",
+                "--vout=gl",
+            ],
         ]
         last_exc = None
         for args in candidates:
