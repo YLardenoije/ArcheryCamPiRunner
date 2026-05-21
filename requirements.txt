@@ -12,3 +12,6 @@ python-vlc>=3.0.0
 
 # Zeroconf camera discovery
 zeroconf>=0.132.2
+
+# Optional ONVIF PTZ control
+onvif-zeep>=0.2.12

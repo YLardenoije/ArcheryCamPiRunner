@@ -6,11 +6,14 @@ import time
 import tkinter as tk
 
 import config
+from camera_control import apply_zoom_focus_onvif
+from camera_settings import CameraSettingsStore
 from camera_discovery import (
     discover_onvif_ws_cameras,
     discover_rtsp_cameras,
     discover_rtsp_port_scan_cameras,
     discover_rtsp_port_scan_cameras_multi,
+    resolve_mac_for_host,
 )
 from vlc_player import VLCPlayer
 from gui import KioskGUI
@@ -26,6 +29,7 @@ def shutdown(*args):
     root.destroy()
     sys.exit(0)
 if __name__ == "__main__":
+    settings_store = CameraSettingsStore(config.CAMERA_SETTINGS_FILE)
     discovered_cameras = []
     if config.ENABLE_ZEROCONF_DISCOVERY:
         print(
@@ -95,7 +99,21 @@ if __name__ == "__main__":
         if not config.ENABLE_ZEROCONF_DISCOVERY:
             print("Zeroconf discovery disabled")
 
-    boot_rtsp_url = discovered_cameras[0]["url"] if discovered_cameras else ""
+    for camera in discovered_cameras:
+        host = camera.get("host", "")
+        camera["mac"] = resolve_mac_for_host(host)
+
+    settings_store.apply_to_cameras(discovered_cameras)
+    startup_camera = settings_store.choose_startup_camera(discovered_cameras)
+    boot_rtsp_url = startup_camera.get("url", "") if startup_camera else ""
+
+    if startup_camera:
+        print(
+            "Startup camera selected:",
+            startup_camera.get("name", "camera"),
+            startup_camera.get("url", ""),
+            f"(role={startup_camera.get('role', 'none')}, mac={startup_camera.get('mac', '')})",
+        )
 
     # Create Tkinter root window
     root = tk.Tk()
@@ -113,6 +131,24 @@ if __name__ == "__main__":
         shutdown,
         initial_rtsp_url=boot_rtsp_url,
         initial_cameras=discovered_cameras,
+        settings_store=settings_store,
+        apply_ptz_fn=lambda camera, zoom, focus, **kwargs: apply_zoom_focus_onvif(
+            camera.get("host", ""),
+            zoom,
+            focus,
+            username=config.ONVIF_USERNAME,
+            password=config.ONVIF_PASSWORD,
+            port=config.ONVIF_PORT,
+            zoom_range_seconds=getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0),
+            focus_range_seconds=getattr(config, "ONVIF_FULL_FOCUS_TIME_SECONDS", 3.0),
+            zoom_in_speed=getattr(config, "ONVIF_ZOOM_IN_SPEED", 1.0),
+            zoom_reset_seconds=getattr(config, "ONVIF_FULL_ZOOM_RESET_TIME_SECONDS", getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0)),
+            zoom_in_full_seconds=getattr(config, "ONVIF_FULL_ZOOM_IN_TIME_SECONDS", getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0)),
+            zoom_final_nudge_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_SECONDS", 0.0),
+            zoom_final_nudge_pause_seconds=getattr(config, "ONVIF_ZOOM_FINAL_NUDGE_PAUSE_SECONDS", 0.2),
+            use_status_feedback=getattr(config, "ONVIF_USE_STATUS_FEEDBACK", True),
+            **kwargs,
+        ),
     )
     
     # Setup signal handlers
@@ -128,6 +164,26 @@ if __name__ == "__main__":
         "restart_in_progress": False,
         "last_restart_ts": 0.0,
     }
+
+    # VLC state is polled on a dedicated background thread so that a blocked/deadlocked
+    # libvlc call never freezes the Tk main event loop.
+    _vlc_state_cache = {"state_text": "unknown", "updated_at": 0.0}
+    _vlc_state_lock = threading.Lock()
+
+    def _vlc_state_poller():
+        """Background thread: polls VLC state every 2 s and caches the result."""
+        while True:
+            time.sleep(2)
+            try:
+                state = vlc_player.player.get_state()
+                state_text = str(state).lower()
+            except Exception:
+                state_text = "error"
+            with _vlc_state_lock:
+                _vlc_state_cache["state_text"] = state_text
+                _vlc_state_cache["updated_at"] = time.time()
+
+    threading.Thread(target=_vlc_state_poller, daemon=True).start()
 
     def _current_stream_url():
         return (getattr(web, "rtsp_url", "") or "").strip()
@@ -179,16 +235,15 @@ if __name__ == "__main__":
             watchdog_state["consecutive_failures"] = 0
             return
 
-        try:
-            state = vlc_player.player.get_state()
-        except Exception as exc:
-            print("Watchdog: failed to read VLC state:", exc)
-            watchdog_state["consecutive_failures"] += 1
-            if watchdog_state["consecutive_failures"] >= threshold:
-                _restart_stream_async("state-unavailable")
-            return
+        # Read the cached state written by _vlc_state_poller (off main thread).
+        # If the cache is stale (poller itself blocked > 15 s), treat as error.
+        with _vlc_state_lock:
+            state_text = _vlc_state_cache["state_text"]
+            cache_age = time.time() - _vlc_state_cache["updated_at"]
 
-        state_text = str(state).lower()
+        if cache_age > 15:
+            state_text = "error"
+            print(f"Watchdog: VLC state cache stale ({cache_age:.0f}s) — treating as error")
         if "playing" in state_text or "opening" in state_text or "buffering" in state_text:
             watchdog_state["consecutive_failures"] = 0
             return

@@ -3,6 +3,7 @@ import os
 
 # Directories
 UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
+CAMERA_SETTINGS_FILE = os.path.expanduser("~/.archery_cam_camera_settings.json")
 
 # Network settings
 RTSP_URL = ""
@@ -40,6 +41,19 @@ RTSP_SCAN_PATH_CANDIDATES = [
 STREAM_WATCHDOG_ENABLED = True
 STREAM_WATCHDOG_INTERVAL_SECONDS = 5
 STREAM_WATCHDOG_FAILURE_THRESHOLD = 3
+ONVIF_USERNAME = "admin"
+ONVIF_PASSWORD = "admin"
+ONVIF_PORT = 80
+# Travel time (seconds) to move from one extreme to the other.
+# Tune these to match your cameras' motor speed.
+ONVIF_FULL_ZOOM_TIME_SECONDS = 10.0
+ONVIF_FULL_FOCUS_TIME_SECONDS = 10.0
+ONVIF_FULL_ZOOM_RESET_TIME_SECONDS = 10.0
+ONVIF_FULL_ZOOM_IN_TIME_SECONDS = 10.0
+ONVIF_ZOOM_IN_SPEED = 1.0   # set to 1.0 for calibrated timing mode; lower only if your camera honors speed
+ONVIF_USE_STATUS_FEEDBACK = False
+ONVIF_ZOOM_FINAL_NUDGE_SECONDS = 0.00
+ONVIF_ZOOM_FINAL_NUDGE_PAUSE_SECONDS = 0.2
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

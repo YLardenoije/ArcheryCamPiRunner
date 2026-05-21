@@ -22,6 +22,7 @@ class VLCPlayer:
                 "--no-sub-autodetect-file",
                 "--network-caching=300",
                 "--avcodec-hw=drm",
+                "--avcodec-dr=0",   # disable direct rendering; prevents deadlock with HEVC + DRM
             ],
             [
                 "--no-audio",

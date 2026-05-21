@@ -331,6 +331,31 @@ def _interface_subnet_cidr(interface_name):
     return ""
 
 
+def resolve_mac_for_host(host):
+    """Best-effort host to MAC lookup using neighbor table."""
+    ip = (host or "").strip()
+    if not ip:
+        return ""
+
+    try:
+        result = subprocess.run(
+            ["ip", "neigh", "show", ip],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return ""
+
+        output = result.stdout.strip().lower()
+        match = re.search(r"lladdr\s+([0-9a-f:]{17})", output)
+        if not match:
+            return ""
+        return match.group(1)
+    except Exception:
+        return ""
+
+
 def _looks_like_rtsp_endpoint(host, port, timeout_seconds):
     """Send an RTSP OPTIONS probe and verify RTSP-like response."""
     try:
