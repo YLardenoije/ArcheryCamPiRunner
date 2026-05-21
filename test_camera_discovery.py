@@ -171,6 +171,28 @@ class TestCameraDiscovery(unittest.TestCase):
         urls = sorted([c["url"] for c in cameras])
         self.assertEqual(urls, ["rtsp://192.168.1.10:554/live/0/MAIN", "rtsp://192.168.1.12:8554/live/0/MAIN"])
 
+    def test_normalize_rtsp_paths_dedupes_and_formats(self):
+        paths = camera_discovery._normalize_rtsp_paths(
+            default_path="live/0/MAIN",
+            path_candidates=["/live/0/MAIN", "stream1", "/stream1", ""],
+        )
+        self.assertEqual(paths, ["/live/0/MAIN", "/stream1", ""])
+
+    def test_discover_working_rtsp_url_uses_first_valid_candidate(self):
+        with patch(
+            "camera_discovery._probe_rtsp_path_status",
+            side_effect=[404, 404, 200],
+        ):
+            url = camera_discovery._discover_working_rtsp_url(
+                "192.168.1.88",
+                554,
+                default_path="/live/0/MAIN",
+                path_candidates=["/bad", "/stream1"],
+                timeout_seconds=0.2,
+            )
+
+        self.assertEqual(url, "rtsp://192.168.1.88:554/stream1")
+
     def test_discover_rtsp_port_scan_uses_interface_hint_subnet(self):
         with patch("camera_discovery._interface_subnet_cidr", return_value="192.168.100.0/24"), patch(
             "camera_discovery._candidate_hosts", return_value=[]

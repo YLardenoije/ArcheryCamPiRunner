@@ -27,6 +27,13 @@ RTSP_SCAN_INTERFACE_HINT = "eth0"
 RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE = True
 RTSP_SCAN_CONNECT_TIMEOUT = 0.0
 RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE = True
+RTSP_SCAN_PATH_CANDIDATES = [
+	"/live/0/MAIN",
+	"/Streaming/Channels/101",
+	"/stream1",
+	"/cam/realmonitor?channel=1&subtype=0",
+	"/h264Preview_01_main",
+]
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

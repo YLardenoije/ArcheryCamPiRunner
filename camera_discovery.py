@@ -348,6 +348,62 @@ def _looks_like_rtsp_endpoint(host, port, timeout_seconds):
         return False
 
 
+def _normalize_rtsp_paths(default_path="", path_candidates=None):
+    """Return de-duplicated RTSP path candidates with normalized leading slash."""
+    normalized = []
+    seen = set()
+
+    for raw in [default_path] + list(path_candidates or []):
+        value = (raw or "").strip()
+        if value and not value.startswith("/"):
+            value = "/" + value
+        if value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+
+    return normalized
+
+
+def _probe_rtsp_path_status(host, port, path, timeout_seconds):
+    """Return RTSP status code for DESCRIBE on a specific path, or None."""
+    if path and not path.startswith("/"):
+        path = "/" + path
+    try:
+        with socket.create_connection((host, int(port)), timeout=max(0.05, float(timeout_seconds))) as sock:
+            sock.settimeout(max(0.05, float(timeout_seconds)))
+            request = (
+                f"DESCRIBE rtsp://{host}:{int(port)}{path} RTSP/1.0\r\n"
+                "CSeq: 2\r\n"
+                "Accept: application/sdp\r\n"
+                "User-Agent: ArcheryCamPiRunner\r\n\r\n"
+            ).encode("utf-8")
+            sock.sendall(request)
+            response = sock.recv(256).decode("utf-8", errors="ignore")
+            first_line = response.splitlines()[0] if response else ""
+            match = re.search(r"RTSP/\d\.\d\s+(\d{3})", first_line)
+            if not match:
+                return None
+            return int(match.group(1))
+    except Exception:
+        return None
+
+
+def _discover_working_rtsp_url(host, port, default_path="", path_candidates=None, timeout_seconds=0.5):
+    """Try known RTSP paths and return the first viable URL."""
+    candidates = _normalize_rtsp_paths(default_path=default_path, path_candidates=path_candidates)
+    if not candidates:
+        return _append_default_path_if_missing(f"rtsp://{host}:{int(port)}", default_path)
+
+    for path in candidates:
+        status = _probe_rtsp_path_status(host, port, path, timeout_seconds)
+        # 200: stream description available, 401/403: endpoint exists but requires auth.
+        if status in (200, 401, 403):
+            return f"rtsp://{host}:{int(port)}{path}"
+
+    return _append_default_path_if_missing(f"rtsp://{host}:{int(port)}", default_path)
+
+
 def discover_rtsp_port_scan_cameras(
     subnet_cidr="",
     ports=None,
@@ -357,6 +413,7 @@ def discover_rtsp_port_scan_cameras(
     interface_hint="",
     require_rtsp_handshake=True,
     connect_timeout_seconds=0.0,
+    path_candidates=None,
 ):
     """Fallback discovery by scanning likely RTSP ports on local subnet.
 
@@ -409,11 +466,19 @@ def discover_rtsp_port_scan_cameras(
                 stats["handshake_failures"] += 1
             return None
 
+        discovered_url = _discover_working_rtsp_url(
+            host,
+            port,
+            default_path=default_path,
+            path_candidates=path_candidates,
+            timeout_seconds=per_connect_timeout,
+        )
+
         if require_rtsp_handshake:
-            return host, int(port)
+            return host, int(port), discovered_url
 
         if _is_tcp_port_open(host, port, per_connect_timeout):
-            return host, int(port)
+            return host, int(port), discovered_url
 
         return None
 
@@ -427,8 +492,7 @@ def discover_rtsp_port_scan_cameras(
             result = future.result()
             if not result:
                 continue
-            host, port = result
-            url = _append_default_path_if_missing(f"rtsp://{host}:{port}", default_path)
+            host, port, url = result
             if url in seen_urls:
                 continue
             seen_urls.add(url)
@@ -463,6 +527,7 @@ def discover_rtsp_port_scan_cameras_multi(
     require_rtsp_handshake=True,
     connect_timeout_seconds=0.0,
     retry_without_handshake=False,
+    path_candidates=None,
 ):
     """Scan multiple subnets and combine discovered RTSP cameras.
 
@@ -487,6 +552,7 @@ def discover_rtsp_port_scan_cameras_multi(
             interface_hint=interface_hint,
             require_rtsp_handshake=require_rtsp_handshake,
             connect_timeout_seconds=connect_timeout_seconds,
+            path_candidates=path_candidates,
         )
 
         if not cameras and require_rtsp_handshake and retry_without_handshake:
@@ -502,6 +568,7 @@ def discover_rtsp_port_scan_cameras_multi(
                 interface_hint=interface_hint,
                 require_rtsp_handshake=False,
                 connect_timeout_seconds=connect_timeout_seconds,
+                path_candidates=path_candidates,
             )
             for camera in cameras:
                 camera["source"] = "rtsp-port-scan-unverified"

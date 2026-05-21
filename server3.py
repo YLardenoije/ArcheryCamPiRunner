@@ -69,6 +69,7 @@ if __name__ == "__main__":
                 require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
                 connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
                 retry_without_handshake=config.RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE,
+                path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
             )
         else:
             discovered_cameras = discover_rtsp_port_scan_cameras(
@@ -80,6 +81,7 @@ if __name__ == "__main__":
                 interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
                 require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
                 connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
+                path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
             )
         if discovered_cameras:
             print("Discovered cameras via RTSP scan fallback:")
