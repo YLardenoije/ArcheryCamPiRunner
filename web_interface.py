@@ -174,7 +174,11 @@ class WebInterface:
         return None
 
     def _apply_ptz(self, camera, zoom, focus):
+        host = camera.get("host", "")
+        name = camera.get("name", host)
+        print(f"PTZ: _apply_ptz camera={name!r} host={host!r} zoom={zoom} focus={focus} fn_set={self.apply_ptz_fn is not None}")
         if not self.apply_ptz_fn:
+            print("PTZ: no apply_ptz_fn configured, skipping")
             return False, "PTZ control is not configured"
         return self.apply_ptz_fn(camera, zoom, focus)
     
