@@ -30,6 +30,7 @@ if __name__ == "__main__":
         discovered_cameras = discover_rtsp_cameras(
             config.ZEROCONF_SERVICE_TYPES,
             timeout_seconds=config.ZEROCONF_DISCOVERY_TIMEOUT,
+            default_path=config.RTSP_DEFAULT_PATH,
         )
         if discovered_cameras:
             print("Discovered RTSP cameras via zeroconf:")
@@ -40,7 +41,10 @@ if __name__ == "__main__":
 
     if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
         print("Activating fallback 1/2: ONVIF WS-Discovery")
-        discovered_cameras = discover_onvif_ws_cameras(timeout_seconds=config.ONVIF_FALLBACK_TIMEOUT)
+        discovered_cameras = discover_onvif_ws_cameras(
+            timeout_seconds=config.ONVIF_FALLBACK_TIMEOUT,
+            default_path=config.RTSP_DEFAULT_PATH,
+        )
         if discovered_cameras:
             print("Discovered cameras via ONVIF WS-Discovery fallback:")
             for camera in discovered_cameras:
@@ -53,6 +57,7 @@ if __name__ == "__main__":
             ports=config.RTSP_SCAN_PORTS,
             timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
             max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+            default_path=config.RTSP_DEFAULT_PATH,
         )
         if discovered_cameras:
             print("Discovered cameras via RTSP scan fallback:")

@@ -137,10 +137,13 @@ class TestCameraDiscovery(unittest.TestCase):
                 return None
 
         with patch("camera_discovery.socket.socket", return_value=FakeSocket()):
-            cameras = camera_discovery.discover_onvif_ws_cameras(timeout_seconds=0.2)
+            cameras = camera_discovery.discover_onvif_ws_cameras(
+                timeout_seconds=0.2,
+                default_path="/live/0/MAIN",
+            )
 
         self.assertEqual(len(cameras), 1)
-        self.assertEqual(cameras[0]["url"], "rtsp://192.168.1.77:554")
+        self.assertEqual(cameras[0]["url"], "rtsp://192.168.1.77:554/live/0/MAIN")
         self.assertEqual(cameras[0]["source"], "onvif-ws-discovery")
 
     def test_discover_rtsp_port_scan_cameras(self):
@@ -157,10 +160,11 @@ class TestCameraDiscovery(unittest.TestCase):
                 ports=[554, 8554],
                 timeout_seconds=0.2,
                 max_hosts=3,
+                default_path="/live/0/MAIN",
             )
 
         urls = sorted([c["url"] for c in cameras])
-        self.assertEqual(urls, ["rtsp://192.168.1.10:554", "rtsp://192.168.1.12:8554"])
+        self.assertEqual(urls, ["rtsp://192.168.1.10:554/live/0/MAIN", "rtsp://192.168.1.12:8554/live/0/MAIN"])
 
 
 if __name__ == "__main__":

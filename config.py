@@ -6,6 +6,7 @@ UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
 
 # Network settings
 RTSP_URL = ""
+RTSP_DEFAULT_PATH = "/live/0/MAIN"
 FLASK_PORT = 8080
 ENABLE_ZEROCONF_DISCOVERY = True
 ZEROCONF_DISCOVERY_TIMEOUT = 8.0

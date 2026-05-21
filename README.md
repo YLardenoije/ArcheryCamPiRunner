@@ -122,6 +122,7 @@ ArcheryCamPiRunner/
 |---------|-------------|---------|
 | `UPLOAD_FOLDER` | Directory for uploaded images | `~/kiosk_images` |
 | `RTSP_URL` | Default RTSP stream URL | `` |
+| `RTSP_DEFAULT_PATH` | Default path appended when discovery only finds host/port | `/live/0/MAIN` |
 | `FLASK_PORT` | Web interface port | `8080` |
 | `ENABLE_ZEROCONF_DISCOVERY` | Discover RTSP camera on boot using mDNS | `True` |
 | `ZEROCONF_DISCOVERY_TIMEOUT` | Seconds to wait for discovery on boot | `8.0` |

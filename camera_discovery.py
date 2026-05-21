@@ -106,7 +106,7 @@ def discover_rtsp_url(service_types, timeout_seconds=8.0):
         zeroconf.close()
 
 
-def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
+def discover_rtsp_cameras(service_types, timeout_seconds=8.0, default_path=""):
     """Discover RTSP cameras via zeroconf/mDNS.
 
     Returns:
@@ -131,6 +131,7 @@ def discover_rtsp_cameras(service_types, timeout_seconds=8.0):
             url = _build_rtsp_url(info)
             if not url:
                 return
+            url = _append_default_path_if_missing(url, default_path)
 
             with lock:
                 if url in seen_urls:
@@ -186,7 +187,23 @@ def _extract_host_from_url(url):
     return match.group(1)
 
 
-def discover_onvif_ws_cameras(timeout_seconds=4.0):
+def _append_default_path_if_missing(url, default_path=""):
+    """Append default path if URL has no path component."""
+    if not url or not default_path:
+        return url
+
+    path = default_path if default_path.startswith("/") else "/" + default_path
+    match = re.match(r"^(rtsp://[^/]+)(/.*)?$", url)
+    if not match:
+        return url
+
+    base, existing_path = match.group(1), match.group(2)
+    if existing_path:
+        return url
+    return base + path
+
+
+def discover_onvif_ws_cameras(timeout_seconds=4.0, default_path=""):
     """Discover cameras via ONVIF WS-Discovery over multicast UDP.
 
     Returns:
@@ -232,7 +249,7 @@ def discover_onvif_ws_cameras(timeout_seconds=4.0):
                     host = _extract_host_from_url(token)
                     if not host:
                         continue
-                    rtsp_url = f"rtsp://{host}:554"
+                    rtsp_url = _append_default_path_if_missing(f"rtsp://{host}:554", default_path)
                     if rtsp_url in seen:
                         continue
                     seen.add(rtsp_url)
@@ -287,7 +304,7 @@ def _auto_subnet_cidr():
         return ""
 
 
-def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=4.0, max_hosts=254):
+def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=4.0, max_hosts=254, default_path=""):
     """Fallback discovery by scanning likely RTSP ports on local subnet.
 
     Returns:
@@ -325,7 +342,7 @@ def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=
                 if not result:
                     continue
                 host, port = result
-                url = f"rtsp://{host}:{port}"
+                url = _append_default_path_if_missing(f"rtsp://{host}:{port}", default_path)
                 if url in seen_urls:
                     continue
                 seen_urls.add(url)
