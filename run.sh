@@ -19,6 +19,8 @@ LOG_FILE="$APP_DIR/kiosk.log"
 STOP_TIMEOUT_SECONDS=15
 VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+DISPLAY_VALUE="${DISPLAY:-:0}"
+XAUTHORITY_VALUE="${XAUTHORITY:-$HOME/.Xauthority}"
 
 resolve_python_bin() {
     if [ -n "$PYTHON_BIN" ]; then
@@ -109,11 +111,28 @@ stop_existing_instances() {
 start_background() {
     cd "$APP_DIR"
     echo "Starting $APP_ENTRY in background..."
+    echo "Using python: $PYTHON_BIN"
+    echo "DISPLAY=$DISPLAY_VALUE"
+
+    if [ -f "$XAUTHORITY_VALUE" ]; then
+        echo "XAUTHORITY=$XAUTHORITY_VALUE"
+    else
+        echo "XAUTHORITY file not found at $XAUTHORITY_VALUE (GUI startup may fail)"
+    fi
 
     # Start in a dedicated session so we can stop all spawned processes as a group.
-    setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
+    DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" setsid "$PYTHON_BIN" "$APP_ENTRY" >> "$LOG_FILE" 2>&1 &
     local pid=$!
     echo "$pid" > "$PID_FILE"
+
+    # Verify process stayed alive long enough to indicate successful startup.
+    sleep 2
+    if ! is_running "$pid"; then
+        echo "Startup failed. Last 50 log lines:"
+        tail -n 50 "$LOG_FILE" || true
+        rm -f "$PID_FILE"
+        return 1
+    fi
 
     echo "Started with PID $pid"
     echo "Logs: $LOG_FILE"
@@ -122,7 +141,14 @@ start_background() {
 start_foreground() {
     cd "$APP_DIR"
     echo "Starting $APP_ENTRY in foreground..."
-    exec "$PYTHON_BIN" "$APP_ENTRY"
+    echo "Using python: $PYTHON_BIN"
+    echo "DISPLAY=$DISPLAY_VALUE"
+    if [ -f "$XAUTHORITY_VALUE" ]; then
+        echo "XAUTHORITY=$XAUTHORITY_VALUE"
+    else
+        echo "XAUTHORITY file not found at $XAUTHORITY_VALUE (GUI startup may fail)"
+    fi
+    exec DISPLAY="$DISPLAY_VALUE" XAUTHORITY="$XAUTHORITY_VALUE" "$PYTHON_BIN" "$APP_ENTRY"
 }
 
 if ! command -v python3 >/dev/null 2>&1; then

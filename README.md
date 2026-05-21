@@ -204,10 +204,18 @@ Run in foreground:
 
 If `.venv/bin/python` exists, `run.sh` uses it automatically. You can override with `PYTHON_BIN=/path/to/python`.
 
+`run.sh` also exports `DISPLAY` (default `:0`) and `XAUTHORITY` (default `$HOME/.Xauthority`) to improve Tkinter kiosk startup from non-desktop shells.
+
 If graceful shutdown fails, use the fallback force-kill script:
 
 ```bash
 ./kill.sh
+```
+
+If the kiosk does not appear on screen, check startup logs:
+
+```bash
+tail -n 100 kiosk.log
 ```
 
 ## Troubleshooting
