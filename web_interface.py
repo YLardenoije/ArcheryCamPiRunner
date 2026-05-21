@@ -137,7 +137,7 @@ function ptzSliderChange(slider, idx) {
                 fetch('/ptz_live', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({url: url, zoom: zoom, focus: focus})
+                        body: JSON.stringify({url: url, zoom: zoom, focus: focus, changed: slider.name})
                 }).then(function(r){ return r.json(); }).then(function(d) {
                         if (statusEl) {
                                 statusEl.textContent = d.ok ? ' \u2713 Applied' : ' \u2717 ' + d.msg;
@@ -230,14 +230,16 @@ class WebInterface:
                 return camera
         return None
 
-    def _apply_ptz(self, camera, zoom, focus):
+    def _apply_ptz(self, camera, zoom, focus, **kwargs):
         host = camera.get("host", "")
         name = camera.get("name", host)
-        print(f"PTZ: _apply_ptz camera={name!r} host={host!r} zoom={zoom} focus={focus} fn_set={self.apply_ptz_fn is not None}")
+        apply_zoom  = kwargs.get("apply_zoom",  True)
+        apply_focus = kwargs.get("apply_focus", True)
+        print(f"PTZ: _apply_ptz camera={name!r} host={host!r} zoom={zoom} focus={focus} apply_zoom={apply_zoom} apply_focus={apply_focus} fn_set={self.apply_ptz_fn is not None}")
         if not self.apply_ptz_fn:
             print("PTZ: no apply_ptz_fn configured, skipping")
             return False, "PTZ control is not configured"
-        return self.apply_ptz_fn(camera, zoom, focus)
+        return self.apply_ptz_fn(camera, zoom, focus, **kwargs)
 
     def ptz_live(self):
         """AJAX endpoint: apply PTZ from slider interaction. Returns JSON."""
@@ -245,13 +247,18 @@ class WebInterface:
         url = (data.get("url") or "").strip()
         zoom  = self._clamp_unit(data.get("zoom",  0.0))
         focus = self._clamp_unit(data.get("focus", 0.0))
+        # Only run the axis that the user actually moved to avoid cross-axis interference.
+        changed = (data.get("changed") or "both").strip().lower()
+        apply_zoom  = changed in ("zoom",  "both")
+        apply_focus = changed in ("focus", "both")
         camera = self._find_camera_by_url(url)
         if not camera:
             return {"ok": False, "msg": "Camera not found"}, 404
         camera["ptz"]["zoom"]  = zoom
         camera["ptz"]["focus"] = focus
-        ok, msg = self._apply_ptz(camera, zoom, focus)
-        print(f"PTZ live slider: {'ok' if ok else 'failed'} {msg}")
+        ok, msg = self._apply_ptz(camera, zoom, focus,
+                                  apply_zoom=apply_zoom, apply_focus=apply_focus)
+        print(f"PTZ live slider ({changed}): {'ok' if ok else 'failed'} {msg}")
         return {"ok": ok, "msg": msg}
     
     def index(self):

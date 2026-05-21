@@ -23,6 +23,10 @@ def apply_zoom_focus_onvif(
     port=80,
     zoom_range_seconds=5.0,
     focus_range_seconds=3.0,
+    zoom_in_speed=0.5,
+    apply_zoom=True,
+    apply_focus=True,
+    **_ignored,
 ):
     """Simulated-absolute ONVIF zoom/focus.
 
@@ -36,7 +40,7 @@ def apply_zoom_focus_onvif(
     Same pattern applied for focus.  Only needs to be run once per position.
     Returns (success: bool, message: str).
     """
-    print(f"PTZ: apply_zoom_focus_onvif host={host!r} port={port} zoom={zoom_value} focus={focus_value} has_creds={bool(username and password)}")
+    print(f"PTZ: apply_zoom_focus_onvif host={host!r} port={port} zoom={zoom_value} focus={focus_value} apply_zoom={apply_zoom} apply_focus={apply_focus} has_creds={bool(username and password)}")
 
     if not host:
         msg = "PTZ: missing host, skipping"
@@ -91,58 +95,61 @@ def apply_zoom_focus_onvif(
         profile_token = profile.token
         print(f"PTZ: using profile token={profile_token!r}")
 
-        # Simulated-absolute zoom:
-        #   Step 1 – zoom fully out to get a known starting position.
-        #   Step 2 – zoom in proportionally to reach the desired level.
-        # PanTilt velocity is 0,0 so only the zoom axis moves.
-        stop_req = ptz_service.create_type("Stop")
-        stop_req.ProfileToken = profile_token
-        stop_req.PanTilt = False
-        stop_req.Zoom = True
+        if apply_zoom:
+            # Simulated-absolute zoom:
+            #   Step 1 – zoom fully out at max speed (fast reset to known position).
+            #   Step 2 – zoom in at half speed for accuracy.
+            # PanTilt velocity is 0,0 so only the zoom axis moves.
+            stop_req = ptz_service.create_type("Stop")
+            stop_req.ProfileToken = profile_token
+            stop_req.PanTilt = False
+            stop_req.Zoom = True
 
-        zoom_move = ptz_service.create_type("ContinuousMove")
-        zoom_move.ProfileToken = profile_token
-        zoom_move.Velocity = {"PanTilt": {"x": 0.0, "y": 0.0}, "Zoom": {"x": -1.0}}
+            zoom_move = ptz_service.create_type("ContinuousMove")
+            zoom_move.ProfileToken = profile_token
+            zoom_move.Velocity = {"PanTilt": {"x": 0.0, "y": 0.0}, "Zoom": {"x": -1.0}}
 
-        print(f"PTZ: simulated-absolute zoom — fully out ({zoom_range_seconds:.1f}s)")
-        ptz_service.ContinuousMove(zoom_move)
-        time.sleep(float(zoom_range_seconds))
-        ptz_service.Stop(stop_req)
-
-        if zoom_value > 0.01:
-            zoom_in_time = float(zoom_value) * float(zoom_range_seconds)
-            zoom_move.Velocity["Zoom"]["x"] = 1.0
-            print(f"PTZ: simulated-absolute zoom — in {zoom_value:.2f} ({zoom_in_time:.1f}s)")
+            print(f"PTZ: zoom reset — fully out at max speed ({zoom_range_seconds:.1f}s)")
             ptz_service.ContinuousMove(zoom_move)
-            time.sleep(zoom_in_time)
+            time.sleep(float(zoom_range_seconds))
             ptz_service.Stop(stop_req)
 
-        print("PTZ: zoom positioning complete")
+            if zoom_value > 0.01:
+                # At half speed, full range takes zoom_range_seconds / zoom_in_speed.
+                zoom_in_time = float(zoom_value) * float(zoom_range_seconds) / float(zoom_in_speed)
+                zoom_move.Velocity["Zoom"]["x"] = float(zoom_in_speed)
+                print(f"PTZ: zoom in {zoom_value:.2f} at speed {zoom_in_speed} ({zoom_in_time:.1f}s)")
+                ptz_service.ContinuousMove(zoom_move)
+                time.sleep(zoom_in_time)
+                ptz_service.Stop(stop_req)
 
-        try:
-            print("PTZ: creating imaging service for focus")
-            imaging_service = camera.create_imaging_service()
-            source_token = profile.VideoSourceConfiguration.SourceToken
-            print(f"PTZ: imaging source token={source_token!r}")
-            focus_move = imaging_service.create_type("Move")
-            focus_move.VideoSourceToken = source_token
-            # Step 3 – focus fully near to get a known starting position.
-            focus_move.Focus = {"Continuous": {"Speed": -1.0}}
-            print(f"PTZ: simulated-absolute focus — fully near ({focus_range_seconds:.1f}s)")
-            imaging_service.Move(focus_move)
-            time.sleep(float(focus_range_seconds))
-            imaging_service.Stop({"VideoSourceToken": source_token, "Focus": True})
-            # Step 4 – focus out proportionally.
-            if focus_value > 0.01:
-                focus_in_time = float(focus_value) * float(focus_range_seconds)
-                focus_move.Focus = {"Continuous": {"Speed": 1.0}}
-                print(f"PTZ: simulated-absolute focus — out {focus_value:.2f} ({focus_in_time:.1f}s)")
+            print("PTZ: zoom positioning complete")
+
+        if apply_focus:
+            try:
+                print("PTZ: creating imaging service for focus")
+                imaging_service = camera.create_imaging_service()
+                source_token = profile.VideoSourceConfiguration.SourceToken
+                print(f"PTZ: imaging source token={source_token!r}")
+                focus_move = imaging_service.create_type("Move")
+                focus_move.VideoSourceToken = source_token
+                # Step 3 – focus fully near to get a known starting position.
+                focus_move.Focus = {"Continuous": {"Speed": -1.0}}
+                print(f"PTZ: simulated-absolute focus — fully near ({focus_range_seconds:.1f}s)")
                 imaging_service.Move(focus_move)
-                time.sleep(focus_in_time)
+                time.sleep(float(focus_range_seconds))
                 imaging_service.Stop({"VideoSourceToken": source_token, "Focus": True})
-            print("PTZ: focus positioning complete")
-        except Exception as focus_exc:
-            print(f"PTZ: focus control skipped (optional, not supported by this camera): {focus_exc}")
+                # Step 4 – focus out proportionally.
+                if focus_value > 0.01:
+                    focus_in_time = float(focus_value) * float(focus_range_seconds)
+                    focus_move.Focus = {"Continuous": {"Speed": 1.0}}
+                    print(f"PTZ: simulated-absolute focus — out {focus_value:.2f} ({focus_in_time:.1f}s)")
+                    imaging_service.Move(focus_move)
+                    time.sleep(focus_in_time)
+                    imaging_service.Stop({"VideoSourceToken": source_token, "Focus": True})
+                print("PTZ: focus positioning complete")
+            except Exception as focus_exc:
+                print(f"PTZ: focus control skipped (optional, not supported by this camera): {focus_exc}")
 
         print("PTZ: all commands applied successfully")
         return True, "PTZ command applied"
