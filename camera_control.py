@@ -3,6 +3,16 @@
 import time
 import traceback
 
+# Ports to probe when the configured port fails to return a valid ONVIF response.
+# Many cameras serve an HTML admin page on 80 while ONVIF is on 8080 / 2020 etc.
+_ONVIF_FALLBACK_PORTS = [8080, 2020, 8000, 8899, 80]
+
+
+def _connect_onvif(ONVIFCamera, host, port, username, password):
+    """Create ONVIFCamera on *port* and return it, or raise on failure."""
+    print(f"PTZ: trying ONVIF connect to {host}:{port}")
+    return ONVIFCamera(host, int(port), username, password)
+
 
 def apply_zoom_focus_onvif(host, zoom_value, focus_value, username="", password="", port=80):
     """Best-effort ONVIF zoom/focus command.
@@ -30,10 +40,25 @@ def apply_zoom_focus_onvif(host, zoom_value, focus_value, username="", password=
         print(msg)
         return False, "python-onvif-zeep is not installed"
 
-    try:
-        print(f"PTZ: connecting to camera {host}:{port}")
-        camera = ONVIFCamera(host, int(port), username, password)
+    # Build ordered port list: configured port first, then common fallbacks.
+    configured_port = int(port)
+    ports_to_try = [configured_port] + [p for p in _ONVIF_FALLBACK_PORTS if p != configured_port]
 
+    camera = None
+    for try_port in ports_to_try:
+        try:
+            camera = _connect_onvif(ONVIFCamera, host, try_port, username, password)
+            print(f"PTZ: ONVIF connected successfully on port {try_port}")
+            break
+        except Exception as conn_exc:
+            print(f"PTZ: port {try_port} failed: {conn_exc}")
+
+    if camera is None:
+        msg = f"ONVIF connect failed on all tried ports {ports_to_try}"
+        print(f"PTZ: {msg}")
+        return False, msg
+
+    try:
         print("PTZ: creating media service")
         media_service = camera.create_media_service()
 
