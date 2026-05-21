@@ -356,6 +356,7 @@ def discover_rtsp_port_scan_cameras(
     default_path="",
     interface_hint="",
     require_rtsp_handshake=True,
+    connect_timeout_seconds=0.0,
 ):
     """Fallback discovery by scanning likely RTSP ports on local subnet.
 
@@ -376,19 +377,44 @@ def discover_rtsp_port_scan_cameras(
     if max_hosts > 0:
         hosts = hosts[: int(max_hosts)]
 
+    target_count = max(1, len(hosts) * max(1, len(ports)))
+    auto_connect_timeout = max(0.2, min(1.5, float(timeout_seconds) * 64.0 / float(target_count)))
+    per_connect_timeout = (
+        max(0.05, float(connect_timeout_seconds)) if float(connect_timeout_seconds) > 0 else auto_connect_timeout
+    )
+
+    print(
+        "RTSP scan parameters:",
+        f"subnet={cidr}",
+        f"hosts={len(hosts)}",
+        f"ports={ports}",
+        f"handshake_required={require_rtsp_handshake}",
+        f"connect_timeout={per_connect_timeout:.2f}s",
+    )
+
     cameras = []
     seen_urls = set()
-    per_connect_timeout = max(0.05, float(timeout_seconds) / max(1, len(hosts)))
+    stats = {"open_ports": 0, "handshake_failures": 0}
+    stats_lock = threading.Lock()
 
     def _scan_target(host, port):
         if not _is_tcp_port_open(host, port, per_connect_timeout):
             return None
+
+        with stats_lock:
+            stats["open_ports"] += 1
+
         if require_rtsp_handshake and not _looks_like_rtsp_endpoint(host, port, per_connect_timeout):
+            with stats_lock:
+                stats["handshake_failures"] += 1
             return None
+
         if require_rtsp_handshake:
             return host, int(port)
+
         if _is_tcp_port_open(host, port, per_connect_timeout):
             return host, int(port)
+
         return None
 
     futures = []
@@ -397,29 +423,32 @@ def discover_rtsp_port_scan_cameras(
             for port in ports:
                 futures.append(pool.submit(_scan_target, host, port))
 
-        try:
-            for future in concurrent.futures.as_completed(futures, timeout=max(1.0, float(timeout_seconds) * 2.0)):
-                result = future.result()
-                if not result:
-                    continue
-                host, port = result
-                url = _append_default_path_if_missing(f"rtsp://{host}:{port}", default_path)
-                if url in seen_urls:
-                    continue
-                seen_urls.add(url)
-                cameras.append(
-                    {
-                        "name": f"scan-{host}:{port}",
-                        "url": url,
-                        "service_type": "_rtsp._tcp.scan",
-                        "host": host,
-                        "port": port,
-                        "source": "rtsp-port-scan",
-                    }
-                )
-        except concurrent.futures.TimeoutError:
-            # Keep cameras discovered so far when scan time budget is exceeded.
-            pass
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if not result:
+                continue
+            host, port = result
+            url = _append_default_path_if_missing(f"rtsp://{host}:{port}", default_path)
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            cameras.append(
+                {
+                    "name": f"scan-{host}:{port}",
+                    "url": url,
+                    "service_type": "_rtsp._tcp.scan",
+                    "host": host,
+                    "port": port,
+                    "source": "rtsp-port-scan",
+                }
+            )
+
+    if not cameras:
+        print(
+            "RTSP scan found no cameras:",
+            f"open_ports={stats['open_ports']}",
+            f"handshake_failures={stats['handshake_failures']}",
+        )
 
     return cameras
 
@@ -432,6 +461,7 @@ def discover_rtsp_port_scan_cameras_multi(
     default_path="",
     interface_hint="",
     require_rtsp_handshake=True,
+    connect_timeout_seconds=0.0,
 ):
     """Scan multiple subnets and combine discovered RTSP cameras.
 
@@ -455,6 +485,7 @@ def discover_rtsp_port_scan_cameras_multi(
             default_path=default_path,
             interface_hint=interface_hint,
             require_rtsp_handshake=require_rtsp_handshake,
+            connect_timeout_seconds=connect_timeout_seconds,
         )
         for camera in cameras:
             url = camera.get("url", "")
