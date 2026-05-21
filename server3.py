@@ -139,6 +139,8 @@ if __name__ == "__main__":
             username=config.ONVIF_USERNAME,
             password=config.ONVIF_PASSWORD,
             port=config.ONVIF_PORT,
+            zoom_range_seconds=getattr(config, "ONVIF_FULL_ZOOM_TIME_SECONDS", 5.0),
+            focus_range_seconds=getattr(config, "ONVIF_FULL_FOCUS_TIME_SECONDS", 3.0),
         ),
     )
     

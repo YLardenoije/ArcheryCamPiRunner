@@ -44,6 +44,10 @@ STREAM_WATCHDOG_FAILURE_THRESHOLD = 3
 ONVIF_USERNAME = "admin"
 ONVIF_PASSWORD = "admin"
 ONVIF_PORT = 80
+# Travel time (seconds) to move from one extreme to the other.
+# Tune these to match your cameras' motor speed.
+ONVIF_FULL_ZOOM_TIME_SECONDS = 5.0
+ONVIF_FULL_FOCUS_TIME_SECONDS = 3.0
 
 # Display settings
 FADE_DURATION = 1.0    # seconds

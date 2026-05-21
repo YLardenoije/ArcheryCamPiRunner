@@ -74,7 +74,7 @@ button{padding:8px 14px;margin:4px;cursor:pointer;}
             </label>
             <div class="ptz-section">
                 <h4>PTZ — Zoom &amp; Focus</h4>
-                <div class="ptz-hint">Sliders apply to the camera instantly (debounced). Click Save to persist.</div>
+                <div class="ptz-hint">Sliders apply to the camera when you stop moving them (~1s delay). The camera zooms fully out then in — this takes several seconds per adjustment. Click Save to persist.</div>
                 <label>Zoom &nbsp;<small>Wide &#8592; &#8594; Tele</small>
                     <div class="slider-row">
                         <input type="range" name="zoom" min="0" max="1" step="0.01"
@@ -147,7 +147,7 @@ function ptzSliderChange(slider, idx) {
                 }).catch(function() {
                         if (statusEl) { statusEl.textContent = ' \u2717 Request failed'; statusEl.style.color = '#c00'; }
                 });
-        }, 400);
+        }, 1000);
 }
 </script>
 </body></html>
