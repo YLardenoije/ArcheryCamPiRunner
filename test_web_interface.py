@@ -53,6 +53,41 @@ class TestWebInterface(unittest.TestCase):
         self.assertEqual(web.vlc_player, self.mock_vlc_player)
         self.assertEqual(web.shutdown_callback, self.mock_shutdown)
         self.assertIsNotNone(web.rtsp_url)
+
+    def test_web_interface_uses_initial_rtsp_url(self):
+        """Test web interface can start with a discovered RTSP URL."""
+        from web_interface import WebInterface
+        discovered_url = "rtsp://192.168.1.123:554/discovered"
+        web = WebInterface(
+            self.mock_gui,
+            self.mock_vlc_player,
+            self.mock_shutdown,
+            initial_rtsp_url=discovered_url,
+        )
+        self.assertEqual(web.rtsp_url, discovered_url)
+
+    def test_web_interface_initial_cameras_populates_dropdown(self):
+        """Test web interface renders a discovered camera list."""
+        from web_interface import WebInterface
+
+        cameras = [
+            {"name": "camera-one", "url": "rtsp://192.168.1.10:554/stream1"},
+            {"name": "camera-two", "url": "rtsp://192.168.1.11:8554/stream2"},
+        ]
+
+        web = WebInterface(
+            self.mock_gui,
+            self.mock_vlc_player,
+            self.mock_shutdown,
+            initial_cameras=cameras,
+        )
+
+        with patch('web_interface.render_template_string') as mock_render:
+            web.index()
+
+        rendered_context = mock_render.call_args[1]
+        self.assertEqual(rendered_context['cameras'], cameras)
+        self.assertEqual(rendered_context['current_url'], "")
     
     def test_index_lists_images(self):
         """Test index page lists uploaded images."""
@@ -105,6 +140,7 @@ class TestWebInterface(unittest.TestCase):
         """Test show_stream endpoint calls GUI."""
         with patch('web_interface.redirect') as mock_redirect:
             web = self._create_web_interface()
+            web.rtsp_url = "rtsp://192.168.1.10:554/stream1"
             web.show_stream()
             
             self.mock_gui.show_stream.assert_called_once()
