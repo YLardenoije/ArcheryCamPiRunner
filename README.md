@@ -179,11 +179,13 @@ chmod +x update_app.sh
 ```
 
 The script installs dependencies into a local virtual environment (`.venv`) to avoid Raspberry Pi OS PEP 668 system-pip restrictions.
+If `kiosk.service` is not found, it falls back to `./run.sh` by default.
 
 Optional environment variables:
 - `RESTART_SERVICE=0` to skip service restart
 - `SERVICE_NAME=my-kiosk.service` to restart a different systemd service
 - `VENV_DIR=/path/to/.venv` to use a custom virtualenv location
+- `FALLBACK_TO_RUN_SCRIPT=0` to disable automatic `run.sh` fallback
 
 ### Run and Kill Scripts
 

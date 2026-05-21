@@ -4,6 +4,7 @@
 #   RESTART_SERVICE=1|0 (default: 1)
 #   SERVICE_NAME=<systemd service name> (default: kiosk.service)
 #   VENV_DIR=<virtualenv directory> (default: .venv)
+#   FALLBACK_TO_RUN_SCRIPT=1|0 (default: 1)
 
 set -euo pipefail
 
@@ -12,6 +13,7 @@ REPO_DIR="${REPO_DIR:-$SCRIPT_DIR}"
 RESTART_SERVICE="${RESTART_SERVICE:-1}"
 SERVICE_NAME="${SERVICE_NAME:-kiosk.service}"
 VENV_DIR="${VENV_DIR:-.venv}"
+FALLBACK_TO_RUN_SCRIPT="${FALLBACK_TO_RUN_SCRIPT:-1}"
 
 cd "$REPO_DIR"
 
@@ -70,7 +72,13 @@ if [ "$RESTART_SERVICE" = "1" ]; then
             sudo systemctl restart "$SERVICE_NAME"
         fi
     else
-        echo "Service $SERVICE_NAME not found. Skipping restart."
+        echo "Service $SERVICE_NAME not found."
+        if [ "$FALLBACK_TO_RUN_SCRIPT" = "1" ] && [ -x "./run.sh" ]; then
+            echo "Falling back to ./run.sh"
+            ./run.sh
+        else
+            echo "Skipping restart."
+        fi
     fi
 else
     echo "Service restart disabled (RESTART_SERVICE=$RESTART_SERVICE)"
