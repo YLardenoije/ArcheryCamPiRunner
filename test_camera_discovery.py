@@ -152,8 +152,13 @@ class TestCameraDiscovery(unittest.TestCase):
         def fake_open(host, port, _timeout):
             return (host, port) in {("192.168.1.10", 554), ("192.168.1.12", 8554)}
 
+        def fake_rtsp(host, port, _timeout):
+            return (host, port) in {("192.168.1.10", 554), ("192.168.1.12", 8554)}
+
         with patch("camera_discovery._candidate_hosts", return_value=hosts), patch(
             "camera_discovery._is_tcp_port_open", side_effect=fake_open
+        ), patch(
+            "camera_discovery._looks_like_rtsp_endpoint", side_effect=fake_rtsp
         ):
             cameras = camera_discovery.discover_rtsp_port_scan_cameras(
                 subnet_cidr="192.168.1.0/24",
@@ -165,6 +170,19 @@ class TestCameraDiscovery(unittest.TestCase):
 
         urls = sorted([c["url"] for c in cameras])
         self.assertEqual(urls, ["rtsp://192.168.1.10:554/live/0/MAIN", "rtsp://192.168.1.12:8554/live/0/MAIN"])
+
+    def test_discover_rtsp_port_scan_uses_interface_hint_subnet(self):
+        with patch("camera_discovery._interface_subnet_cidr", return_value="192.168.100.0/24"), patch(
+            "camera_discovery._candidate_hosts", return_value=[]
+        ):
+            cameras = camera_discovery.discover_rtsp_port_scan_cameras(
+                subnet_cidr="",
+                interface_hint="eth0",
+                timeout_seconds=0.2,
+                max_hosts=5,
+            )
+
+        self.assertEqual(cameras, [])
 
 
 if __name__ == "__main__":

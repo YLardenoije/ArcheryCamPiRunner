@@ -133,6 +133,8 @@ ArcheryCamPiRunner/
 | `RTSP_SCAN_SUBNET` | CIDR subnet for RTSP fallback scan (empty = auto /24) | `` |
 | `RTSP_SCAN_PORTS` | RTSP ports to scan in fallback mode | `[554, 8554]` |
 | `RTSP_SCAN_MAX_HOSTS` | Max hosts to probe during fallback scan | `254` |
+| `RTSP_SCAN_INTERFACE_HINT` | Interface to prefer for auto subnet selection | `eth0` |
+| `RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE` | Require RTSP OPTIONS response before listing a scanned host | `True` |
 | `FADE_DURATION` | Fade transition duration (seconds) | `1.0` |
 | `FADE_STEPS` | Number of fade steps | `5` |
 

@@ -4,6 +4,7 @@ import concurrent.futures
 import ipaddress
 import re
 import socket
+import subprocess
 import threading
 
 
@@ -304,7 +305,58 @@ def _auto_subnet_cidr():
         return ""
 
 
-def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=4.0, max_hosts=254, default_path=""):
+def _interface_subnet_cidr(interface_name):
+    """Return IPv4 subnet CIDR for a given interface name using ip command."""
+    if not interface_name:
+        return ""
+    try:
+        result = subprocess.run(
+            ["ip", "-o", "-4", "addr", "show", "dev", interface_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return ""
+        for line in result.stdout.splitlines():
+            match = re.search(r"inet\s+([0-9.]+)/(\d+)", line)
+            if not match:
+                continue
+            ip_addr = match.group(1)
+            prefix = match.group(2)
+            network = ipaddress.ip_network(f"{ip_addr}/{prefix}", strict=False)
+            return str(network)
+    except Exception:
+        return ""
+    return ""
+
+
+def _looks_like_rtsp_endpoint(host, port, timeout_seconds):
+    """Send an RTSP OPTIONS probe and verify RTSP-like response."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=max(0.05, float(timeout_seconds))) as sock:
+            sock.settimeout(max(0.05, float(timeout_seconds)))
+            request = (
+                f"OPTIONS rtsp://{host}:{int(port)}/ RTSP/1.0\r\n"
+                "CSeq: 1\r\n"
+                "User-Agent: ArcheryCamPiRunner\r\n\r\n"
+            ).encode("utf-8")
+            sock.sendall(request)
+            response = sock.recv(256).decode("utf-8", errors="ignore")
+            return response.startswith("RTSP/") or "RTSP/" in response
+    except Exception:
+        return False
+
+
+def discover_rtsp_port_scan_cameras(
+    subnet_cidr="",
+    ports=None,
+    timeout_seconds=4.0,
+    max_hosts=254,
+    default_path="",
+    interface_hint="",
+    require_rtsp_handshake=True,
+):
     """Fallback discovery by scanning likely RTSP ports on local subnet.
 
     Returns:
@@ -313,9 +365,12 @@ def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=
     if ports is None:
         ports = [554, 8554]
 
-    cidr = subnet_cidr or _auto_subnet_cidr()
+    cidr = subnet_cidr or _interface_subnet_cidr(interface_hint) or _auto_subnet_cidr()
     if not cidr:
         return []
+
+    if interface_hint and not subnet_cidr:
+        print(f"RTSP scan using interface hint '{interface_hint}' -> subnet {cidr}")
 
     hosts = _candidate_hosts(cidr)
     if max_hosts > 0:
@@ -326,6 +381,12 @@ def discover_rtsp_port_scan_cameras(subnet_cidr="", ports=None, timeout_seconds=
     per_connect_timeout = max(0.05, float(timeout_seconds) / max(1, len(hosts)))
 
     def _scan_target(host, port):
+        if not _is_tcp_port_open(host, port, per_connect_timeout):
+            return None
+        if require_rtsp_handshake and not _looks_like_rtsp_endpoint(host, port, per_connect_timeout):
+            return None
+        if require_rtsp_handshake:
+            return host, int(port)
         if _is_tcp_port_open(host, port, per_connect_timeout):
             return host, int(port)
         return None
