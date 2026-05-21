@@ -105,6 +105,8 @@ ArcheryCamPiRunner/
 ├── setup_bridge.sh              # Network bridge setup (temporary)
 ├── setup_bridge_persistent.sh   # Network bridge setup (persistent)
 ├── update_app.sh                # Pull latest code and refresh dependencies
+├── run.sh                       # Restart app cleanly and launch
+├── kill.sh                      # Force-stop app/process group fallback
 ├── test_*.py                    # Unit tests
 ├── run_tests.py                 # Test runner
 ├── requirements-test.txt        # Test dependencies
@@ -179,6 +181,27 @@ chmod +x update_app.sh
 Optional environment variables:
 - `RESTART_SERVICE=0` to skip service restart
 - `SERVICE_NAME=my-kiosk.service` to restart a different systemd service
+
+### Run and Kill Scripts
+
+Use `run.sh` to stop any existing instance cleanly (including spawned child processes) and start a new one.
+
+```bash
+chmod +x run.sh kill.sh
+./run.sh
+```
+
+Run in foreground:
+
+```bash
+./run.sh --foreground
+```
+
+If graceful shutdown fails, use the fallback force-kill script:
+
+```bash
+./kill.sh
+```
 
 ## Troubleshooting
 
