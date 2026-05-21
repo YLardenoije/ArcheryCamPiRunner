@@ -8,6 +8,18 @@ import traceback
 _ONVIF_FALLBACK_PORTS = [8080, 2020, 8000, 8899, 80]
 
 
+def _try_get_zoom_pos(ptz_service, profile_token):
+    """Return current normalised zoom position [0..1] or None if unavailable."""
+    try:
+        status = ptz_service.GetStatus({"ProfileToken": profile_token})
+        if status is None or status.Position is None or status.Position.Zoom is None:
+            return None
+        return float(status.Position.Zoom.x)
+    except Exception as exc:
+        print(f"PTZ: GetStatus failed: {exc}")
+        return None
+
+
 def _connect_onvif(ONVIFCamera, host, port, username, password):
     """Create ONVIFCamera on *port* and return it, or raise on failure."""
     print(f"PTZ: trying ONVIF connect to {host}:{port}")
@@ -96,10 +108,6 @@ def apply_zoom_focus_onvif(
         print(f"PTZ: using profile token={profile_token!r}")
 
         if apply_zoom:
-            # Simulated-absolute zoom:
-            #   Step 1 – zoom fully out at max speed (fast reset to known position).
-            #   Step 2 – zoom in at half speed for accuracy.
-            # PanTilt velocity is 0,0 so only the zoom axis moves.
             stop_req = ptz_service.create_type("Stop")
             stop_req.ProfileToken = profile_token
             stop_req.PanTilt = False
@@ -109,21 +117,52 @@ def apply_zoom_focus_onvif(
             zoom_move.ProfileToken = profile_token
             zoom_move.Velocity = {"PanTilt": {"x": 0.0, "y": 0.0}, "Zoom": {"x": -1.0}}
 
-            print(f"PTZ: zoom reset — fully out at max speed ({zoom_range_seconds:.1f}s)")
-            ptz_service.ContinuousMove(zoom_move)
-            time.sleep(float(zoom_range_seconds))
-            ptz_service.Stop(stop_req)
+            initial_pos = _try_get_zoom_pos(ptz_service, profile_token)
+            print(f"PTZ: GetStatus initial zoom position={initial_pos}")
+            use_feedback = initial_pos is not None
 
-            if zoom_value > 0.01:
-                # At half speed, full range takes zoom_range_seconds / zoom_in_speed.
-                zoom_in_time = float(zoom_value) * float(zoom_range_seconds) / float(zoom_in_speed)
-                zoom_move.Velocity["Zoom"]["x"] = float(zoom_in_speed)
-                print(f"PTZ: zoom in {zoom_value:.2f} at speed {zoom_in_speed} ({zoom_in_time:.1f}s)")
+            if use_feedback:
+                # --- Feedback mode: move at full speed, stop when position sensor says so ---
+                deadline = time.time() + float(zoom_range_seconds) * 2.5
+                print("PTZ: zoom out to wide end (feedback mode)...")
                 ptz_service.ContinuousMove(zoom_move)
-                time.sleep(zoom_in_time)
+                while time.time() < deadline:
+                    pos = _try_get_zoom_pos(ptz_service, profile_token)
+                    if pos is None or pos <= 0.02:
+                        break
+                    time.sleep(0.1)
                 ptz_service.Stop(stop_req)
 
-            print("PTZ: zoom positioning complete")
+                if zoom_value > 0.01:
+                    zoom_move.Velocity["Zoom"]["x"] = 1.0
+                    deadline = time.time() + float(zoom_range_seconds) * 2.5
+                    print(f"PTZ: zoom in to {zoom_value:.4f} (feedback mode)...")
+                    ptz_service.ContinuousMove(zoom_move)
+                    while time.time() < deadline:
+                        pos = _try_get_zoom_pos(ptz_service, profile_token)
+                        if pos is None or pos >= zoom_value - 0.02:
+                            break
+                        time.sleep(0.1)
+                    ptz_service.Stop(stop_req)
+
+                final = _try_get_zoom_pos(ptz_service, profile_token)
+                print(f"PTZ: zoom positioning complete (feedback, final={final})")
+            else:
+                # --- Timing fallback: zoom out for fixed time, then zoom in proportionally ---
+                print(f"PTZ: zoom reset — fully out at speed=1.0 ({zoom_range_seconds:.1f}s, timing fallback)")
+                ptz_service.ContinuousMove(zoom_move)
+                time.sleep(float(zoom_range_seconds))
+                ptz_service.Stop(stop_req)
+
+                if zoom_value > 0.01:
+                    zoom_in_time = float(zoom_value) * float(zoom_range_seconds) / float(zoom_in_speed)
+                    zoom_move.Velocity["Zoom"]["x"] = float(zoom_in_speed)
+                    print(f"PTZ: zoom in {zoom_value:.4f} at speed {zoom_in_speed} ({zoom_in_time:.1f}s, timing fallback)")
+                    ptz_service.ContinuousMove(zoom_move)
+                    time.sleep(zoom_in_time)
+                    ptz_service.Stop(stop_req)
+
+                print("PTZ: zoom positioning complete (timing fallback)")
 
         if apply_focus:
             try:
