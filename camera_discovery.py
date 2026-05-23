@@ -564,6 +564,7 @@ def discover_rtsp_port_scan_cameras_multi(
     require_rtsp_handshake=True,
     connect_timeout_seconds=0.0,
     retry_without_handshake=False,
+    retry_without_handshake_always=False,
     path_candidates=None,
 ):
     """Scan multiple subnets and combine discovered RTSP cameras.
@@ -592,11 +593,13 @@ def discover_rtsp_port_scan_cameras_multi(
             path_candidates=path_candidates,
         )
 
-        if not cameras and require_rtsp_handshake and retry_without_handshake:
+        if require_rtsp_handshake and retry_without_handshake and (
+            retry_without_handshake_always or not cameras
+        ):
             print(
                 f"RTSP scan fallback active on {subnet}: retrying without RTSP handshake validation"
             )
-            cameras = discover_rtsp_port_scan_cameras(
+            unverified = discover_rtsp_port_scan_cameras(
                 subnet_cidr=subnet,
                 ports=ports,
                 timeout_seconds=timeout_seconds,
@@ -607,9 +610,18 @@ def discover_rtsp_port_scan_cameras_multi(
                 connect_timeout_seconds=connect_timeout_seconds,
                 path_candidates=path_candidates,
             )
-            for camera in cameras:
+
+            strict_urls = {c.get("url", "") for c in cameras}
+            added_extra = 0
+            for camera in unverified:
                 camera["source"] = "rtsp-port-scan-unverified"
                 camera["name"] = f"{camera.get('name', 'scan-camera')} (unverified)"
+                if camera.get("url", "") not in strict_urls:
+                    cameras.append(camera)
+                    added_extra += 1
+
+            if added_extra > 0:
+                print(f"RTSP scan fallback on {subnet}: added {added_extra} extra unverified camera(s)")
 
         for camera in cameras:
             url = camera.get("url", "")

@@ -111,6 +111,7 @@ if __name__ == "__main__":
                     require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
                     connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
                     retry_without_handshake=config.RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE,
+                    retry_without_handshake_always=getattr(config, "RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE_ALWAYS", True),
                     path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
                 )
             else:
