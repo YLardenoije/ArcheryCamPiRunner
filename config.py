@@ -4,13 +4,19 @@ import os
 # Directories
 UPLOAD_FOLDER = os.path.expanduser("~/kiosk_images")
 CAMERA_SETTINGS_FILE = os.path.expanduser("~/.archery_cam_camera_settings.json")
+DASHBOARD_REGISTRY_FILE = os.path.expanduser("~/.archery_cam_pi_dashboard.json")
 
 # Network settings
 RTSP_URL = ""
 RTSP_DEFAULT_PATH = "/live/0/MAIN"
 FLASK_PORT = 8080
+DASHBOARD_PORT = 8090
+DASHBOARD_DISCOVERY_SUBNETS = ["192.168.1.0/24"]
+DASHBOARD_DISCOVERY_MAX_HOSTS = 254
+DASHBOARD_DISCOVERY_INTERVAL_SECONDS = 30
 ENABLE_ZEROCONF_DISCOVERY = True
 ZEROCONF_DISCOVERY_TIMEOUT = 8.0
+
 ZEROCONF_SERVICE_TYPES = [
 	"_rtsp._tcp.local.",
 	"_onvif._tcp.local.",
@@ -28,6 +34,7 @@ RTSP_SCAN_INTERFACE_HINT = "eth0"
 RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE = True
 RTSP_SCAN_CONNECT_TIMEOUT = 0.0
 RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE = True
+
 RTSP_SCAN_PATH_CANDIDATES = [
 	"/live/0/MAIN",
 	"/Streaming/Channels/101",

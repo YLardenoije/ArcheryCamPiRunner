@@ -409,6 +409,28 @@ class TestWebInterface(unittest.TestCase):
         self.assertEqual(result[1], 404)
         self.assertFalse(result[0]["ok"])
 
+    def test_update_app_starts_thread_when_script_exists(self):
+        web = self._create_web_interface()
+
+        with patch("web_interface.os.path.exists", side_effect=[False, True]), \
+             patch("web_interface.threading.Thread") as mock_thread:
+            result = web.update_app()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["msg"], "Update started")
+        self.assertEqual(result["script"], "update_app.sh")
+        mock_thread.assert_called_once()
+
+    def test_update_app_returns_404_when_script_missing(self):
+        web = self._create_web_interface()
+
+        with patch("web_interface.os.path.exists", return_value=False):
+            result = web.update_app()
+
+        self.assertEqual(result[1], 404)
+        self.assertFalse(result[0]["ok"])
+        self.assertIn("not found", result[0]["msg"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

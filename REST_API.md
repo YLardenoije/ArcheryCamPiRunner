@@ -33,6 +33,7 @@ This document describes the HTTP endpoints exposed by the kiosk web server.
 - `POST /ptz_live`: Apply live PTZ command (JSON).
 - `GET /get_primary_url`: Return configured primary camera URL.
 - `GET /get_secondary_url`: Return configured secondary camera URL.
+- `GET|POST /update`: Run update script on the device.
 - `GET /kill`: Shut down kiosk application process.
 
 ## Detailed Endpoints
@@ -267,6 +268,36 @@ Success response:
 Failure response:
 - `HTTP 404`
 - JSON: `{"ok": false, "msg": "No secondary camera configured"}`
+
+## GET|POST /update
+
+Starts the local update script in a background thread and returns immediately.
+
+Behavior:
+- Tries `update.sh` first.
+- Falls back to `update_app.sh` for backward compatibility.
+
+Success response:
+- `HTTP 200`
+- JSON:
+
+```json
+{
+  "ok": true,
+  "msg": "Update started",
+  "script": "update_app.sh"
+}
+```
+
+Failure response:
+- `HTTP 404`
+- JSON: `{"ok": false, "msg": "Update script not found"}`
+
+Example:
+
+```bash
+curl -X POST http://<pi-ip>:8080/update
+```
 
 ## GET /kill
 

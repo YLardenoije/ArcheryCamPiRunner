@@ -2,6 +2,7 @@
 import os
 import time
 import threading
+import subprocess
 from urllib.parse import unquote
 from flask import Flask, request, redirect, send_from_directory, url_for, render_template_string
 
@@ -259,6 +260,7 @@ class WebInterface:
         self.app.route("/ptz_live", methods=["POST"])(self.ptz_live)
         self.app.route("/get_primary_url", methods=["GET"])(self.get_primary_url)
         self.app.route("/get_secondary_url", methods=["GET"])(self.get_secondary_url)
+        self.app.route("/update", methods=["GET", "POST"])(self.update_app)
         self.app.route("/kill")(self.kill_app)
 
     @staticmethod
@@ -478,6 +480,29 @@ class WebInterface:
     def set_stream_to_secondary_camera(self):
         """Set active stream to the configured secondary camera."""
         return self._set_stream_to_role("secondary")
+
+    def update_app(self):
+        """Run updater script in the background and return JSON."""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        update_script = os.path.join(base_dir, "update.sh")
+        if not os.path.exists(update_script):
+            # Backward compatibility with older script naming.
+            update_script = os.path.join(base_dir, "update_app.sh")
+        if not os.path.exists(update_script):
+            return {"ok": False, "msg": "Update script not found"}, 404
+
+        def do_update():
+            try:
+                subprocess.run(["bash", update_script], cwd=base_dir, check=False)
+            except Exception as exc:
+                print(f"Update script failed to start: {exc}")
+
+        threading.Thread(target=do_update, daemon=True).start()
+        return {
+            "ok": True,
+            "msg": "Update started",
+            "script": os.path.basename(update_script),
+        }
 
     def camera_settings(self):
         """Update persistent camera metadata and optional PTZ control."""
