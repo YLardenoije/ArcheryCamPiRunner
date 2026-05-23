@@ -58,7 +58,7 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 ### Starting the Application
 
 
-If using Raspberry Pi Connect without a physical HDMI display attached, the desktop may use a virtual framebuffer size that looks odd (letterboxed/stretched) in remote view. This is OS/display-mode behavior rather than app logic. Set a fixed HDMI mode in Raspberry Pi firmware config if needed.
+If using Raspberry Pi Connect without a physical HDMI display attached, early boot can expose a temporary virtual framebuffer size before the display stack settles. The app now performs delayed fullscreen geometry re-sync passes during startup to reduce this race. If the remote view still looks odd, set a fixed HDMI mode in Raspberry Pi firmware config.
 The application will:
 - Start in fullscreen kiosk mode
 - Discover cameras on launch and begin streaming from the first discovered camera
