@@ -115,7 +115,7 @@ class TestWebInterface(unittest.TestCase):
     def test_index_lists_images(self):
         """Test index page lists uploaded images."""
         # Create some test image files
-        test_files = ['test1.jpg', 'test2.png', 'test3.gif']
+        test_files = ['test1.jpg', 'test2.png', 'test3.gif', 'test4.webp', 'test5.tiff']
         for filename in test_files:
             open(os.path.join(self.temp_dir, filename), 'w').close()
         
@@ -132,10 +132,12 @@ class TestWebInterface(unittest.TestCase):
             
             # Check that only image files are listed
             files_arg = call_args[1]['files']
-            self.assertEqual(len(files_arg), 3)
+            self.assertEqual(len(files_arg), 5)
             self.assertIn('test1.jpg', files_arg)
             self.assertIn('test2.png', files_arg)
             self.assertIn('test3.gif', files_arg)
+            self.assertIn('test4.webp', files_arg)
+            self.assertIn('test5.tiff', files_arg)
             self.assertNotIn('readme.txt', files_arg)
     
     def test_show_image_calls_gui(self):
@@ -245,6 +247,21 @@ class TestWebInterface(unittest.TestCase):
             result = web.upload()
             
             self.assertEqual(result, ("No file uploaded", 400))
+
+    def test_upload_rejects_unsupported_extension(self):
+        """Test upload returns 400 for unsupported file extension."""
+        mock_file = MagicMock()
+        mock_file.filename = 'uploaded.txt'
+        mock_file.save = MagicMock()
+
+        with patch('web_interface.request') as mock_request:
+            mock_request.files.get.return_value = mock_file
+            web = self._create_web_interface()
+            result = web.upload()
+
+        self.assertEqual(result[1], 400)
+        self.assertIn("Unsupported file type", result[0])
+        mock_file.save.assert_not_called()
     
     def test_serve_image(self):
         """Test serve_image endpoint."""
@@ -319,6 +336,38 @@ class TestWebInterface(unittest.TestCase):
             web.camera_settings()
 
         self.assertTrue(applied["called"])
+
+    def test_get_primary_url_returns_configured_camera(self):
+        web = self._create_web_interface_with_settings()
+        web.camera_choices[0]["role"] = "primary"
+
+        result = web.get_primary_url()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["role"], "primary")
+        self.assertEqual(result["url"], "rtsp://192.168.100.198:554/live/0/MAIN")
+
+    def test_get_primary_url_returns_404_when_missing(self):
+        web = self._create_web_interface_with_settings()
+
+        result = web.get_primary_url()
+        self.assertEqual(result[1], 404)
+        self.assertFalse(result[0]["ok"])
+
+    def test_get_secondary_url_returns_configured_camera(self):
+        web = self._create_web_interface_with_settings()
+        web.camera_choices[0]["role"] = "secondary"
+
+        result = web.get_secondary_url()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["role"], "secondary")
+        self.assertEqual(result["url"], "rtsp://192.168.100.198:554/live/0/MAIN")
+
+    def test_get_secondary_url_returns_404_when_missing(self):
+        web = self._create_web_interface_with_settings()
+
+        result = web.get_secondary_url()
+        self.assertEqual(result[1], 404)
+        self.assertFalse(result[0]["ok"])
 
 
 if __name__ == "__main__":

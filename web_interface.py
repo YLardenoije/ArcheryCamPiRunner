@@ -8,6 +8,9 @@ from flask import Flask, request, redirect, send_from_directory, url_for, render
 import config
 
 
+ALLOWED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff")
+
+
 INDEX_HTML = """
 <!doctype html>
 <html><head><title>Kiosk Control</title>
@@ -252,6 +255,8 @@ class WebInterface:
         self.app.route("/set_stream")(self.set_stream)
         self.app.route("/camera_settings", methods=["POST"])(self.camera_settings)
         self.app.route("/ptz_live", methods=["POST"])(self.ptz_live)
+        self.app.route("/get_primary_url", methods=["GET"])(self.get_primary_url)
+        self.app.route("/get_secondary_url", methods=["GET"])(self.get_secondary_url)
         self.app.route("/kill")(self.kill_app)
 
     @staticmethod
@@ -273,9 +278,22 @@ class WebInterface:
             return float(default)
         return max(0.0, min(1.0, num))
 
+    @staticmethod
+    def _is_supported_image_filename(filename):
+        return bool(filename and filename.lower().endswith(ALLOWED_IMAGE_EXTENSIONS))
+
     def _find_camera_by_url(self, url):
         for camera in self.camera_choices:
             if camera.get("url") == url:
+                return camera
+        return None
+
+    def _find_camera_by_role(self, role):
+        wanted = (role or "").strip().lower()
+        if wanted not in ("primary", "secondary"):
+            return None
+        for camera in self.camera_choices:
+            if (camera.get("role") or "").strip().lower() == wanted:
                 return camera
         return None
 
@@ -309,12 +327,38 @@ class WebInterface:
                                   apply_zoom=apply_zoom, apply_focus=apply_focus)
         print(f"PTZ live slider ({changed}): {'ok' if ok else 'failed'} {msg}")
         return {"ok": ok, "msg": msg}
+
+    def get_primary_url(self):
+        """Return the configured primary camera URL as JSON."""
+        camera = self._find_camera_by_role("primary")
+        if not camera:
+            return {"ok": False, "msg": "No primary camera configured"}, 404
+        return {
+            "ok": True,
+            "role": "primary",
+            "url": camera.get("url", ""),
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
+
+    def get_secondary_url(self):
+        """Return the configured secondary camera URL as JSON."""
+        camera = self._find_camera_by_role("secondary")
+        if not camera:
+            return {"ok": False, "msg": "No secondary camera configured"}, 404
+        return {
+            "ok": True,
+            "role": "secondary",
+            "url": camera.get("url", ""),
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
     
     def index(self):
         """Main page."""
         files = sorted([
             f for f in os.listdir(config.UPLOAD_FOLDER)
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp"))
+            if self._is_supported_image_filename(f)
         ])
         return render_template_string(
             INDEX_HTML,
@@ -330,6 +374,8 @@ class WebInterface:
             return "No file uploaded", 400
         # Sanitize filename
         filename = os.path.basename(file.filename)
+        if not self._is_supported_image_filename(filename):
+            return f"Unsupported file type. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}", 400
         savepath = os.path.join(config.UPLOAD_FOLDER, filename)
         file.save(savepath)
         return redirect(url_for("index"))
