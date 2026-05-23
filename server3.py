@@ -203,6 +203,64 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=web.run, daemon=True)
     flask_thread.start()
 
+    def _discovery_refresh_loop():
+        if not getattr(config, "DISCOVERY_REFRESH_ENABLED", True):
+            return
+        if not config.ENABLE_DISCOVERY_FALLBACKS:
+            return
+
+        attempts = max(1, int(getattr(config, "DISCOVERY_REFRESH_ATTEMPTS", 6)))
+        interval = max(1.0, float(getattr(config, "DISCOVERY_REFRESH_INTERVAL_SECONDS", 20.0)))
+
+        for attempt in range(1, attempts + 1):
+            time.sleep(interval)
+            try:
+                if getattr(config, "RTSP_SCAN_SUBNETS", None):
+                    print(f"Discovery refresh {attempt}/{attempts}: scanning {config.RTSP_SCAN_SUBNETS}")
+                    scanned = discover_rtsp_port_scan_cameras_multi(
+                        subnet_cidrs=config.RTSP_SCAN_SUBNETS,
+                        ports=config.RTSP_SCAN_PORTS,
+                        timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                        max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                        default_path=config.RTSP_DEFAULT_PATH,
+                        interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                        require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+                        connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
+                        retry_without_handshake=config.RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE,
+                        retry_without_handshake_always=getattr(config, "RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE_ALWAYS", True),
+                        path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
+                    )
+                else:
+                    scanned = discover_rtsp_port_scan_cameras(
+                        subnet_cidr=config.RTSP_SCAN_SUBNET,
+                        ports=config.RTSP_SCAN_PORTS,
+                        timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                        max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                        default_path=config.RTSP_DEFAULT_PATH,
+                        interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                        require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+                        connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
+                        path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
+                    )
+
+                before = len(web.camera_choices)
+                merged = _merge_cameras(web.camera_choices, scanned)
+                added = len(merged) - before
+                if added > 0:
+                    for camera in merged:
+                        host = camera.get("host", "")
+                        if host and not camera.get("mac"):
+                            camera["mac"] = resolve_mac_for_host(host)
+                    settings_store.apply_to_cameras(merged)
+                    web.update_cameras(merged, selected_url=web.rtsp_url)
+                    print(f"Discovery refresh {attempt}/{attempts}: added={added} total={len(merged)}")
+                else:
+                    print(f"Discovery refresh {attempt}/{attempts}: no new cameras")
+            except Exception as exc:
+                print(f"Discovery refresh {attempt}/{attempts} error: {exc}")
+
+    threading.Thread(target=_discovery_refresh_loop, daemon=True).start()
+
     watchdog_state = {
         "consecutive_failures": 0,
         "restart_in_progress": False,

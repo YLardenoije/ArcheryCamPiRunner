@@ -43,6 +43,9 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 | `RTSP_SCAN_ALWAYS_MERGE` | Always run RTSP subnet scan at boot and merge with zeroconf/ONVIF results | `True` |
 | `RTSP_SCAN_BOOT_PASSES` | Number of RTSP scan passes on boot | `2` |
 | `RTSP_SCAN_BOOT_PASS_DELAY_SECONDS` | Delay between boot RTSP scan passes | `2.0` |
+| `DISCOVERY_REFRESH_ENABLED` | Run background RTSP rescans after boot to catch late network readiness | `True` |
+| `DISCOVERY_REFRESH_ATTEMPTS` | Number of background rescan attempts | `6` |
+| `DISCOVERY_REFRESH_INTERVAL_SECONDS` | Delay between background rescan attempts | `20.0` |
 | `BOOT_REAPPLY_ZOOM_ON_STARTUP` | Re-apply saved zoom for startup camera (zoom-out then back in) | `True` |
 | `BOOT_REAPPLY_ZOOM_DELAY_SECONDS` | Delay before startup zoom reapply begins | `2.0` |
 | `BOOT_REAPPLY_ZOOM_ATTEMPTS` | Number of startup zoom reapply attempts | `2` |
