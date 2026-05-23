@@ -9,6 +9,39 @@ _ONVIF_FALLBACK_PORTS = [8080, 2020, 8000, 8899, 80]
 _UNRELIABLE_STATUS_HOSTS = set()
 
 
+def _force_onvif_service_endpoint(service, host, port, service_path):
+    """Best-effort override of ONVIF service endpoint to the discovered host."""
+    endpoint = f"http://{host}:{int(port)}/{service_path.lstrip('/')}"
+    patched = False
+
+    try:
+        old_xaddr = getattr(service, "xaddr", "")
+        if old_xaddr and old_xaddr != endpoint:
+            print(f"PTZ: overriding ONVIF XAddr {old_xaddr} -> {endpoint}")
+        if hasattr(service, "xaddr"):
+            service.xaddr = endpoint
+            patched = True
+    except Exception as exc:
+        print(f"PTZ: could not update service.xaddr: {exc}")
+
+    try:
+        ws_client = getattr(service, "ws_client", None)
+        if ws_client is not None:
+            if hasattr(ws_client, "set_options"):
+                ws_client.set_options(location=endpoint)
+                patched = True
+            binding_options = getattr(ws_client, "_binding_options", None)
+            if isinstance(binding_options, dict):
+                binding_options["address"] = endpoint
+                patched = True
+    except Exception as exc:
+        print(f"PTZ: could not update ws_client endpoint: {exc}")
+
+    if patched:
+        print(f"PTZ: ONVIF endpoint forced to {endpoint}")
+    return endpoint
+
+
 def _try_get_zoom_pos(ptz_service, profile_token):
     """Return current normalised zoom position [0..1] or None if unavailable."""
     try:
@@ -99,9 +132,11 @@ def apply_zoom_focus_onvif(
     try:
         print("PTZ: creating media service")
         media_service = camera.create_media_service()
+        _force_onvif_service_endpoint(media_service, host, try_port, "onvif/media_service")
 
         print("PTZ: creating PTZ service")
         ptz_service = camera.create_ptz_service()
+        _force_onvif_service_endpoint(ptz_service, host, try_port, "onvif/ptz_service")
 
         print("PTZ: fetching profiles")
         profiles = media_service.GetProfiles()
@@ -231,6 +266,7 @@ def apply_zoom_focus_onvif(
             try:
                 print("PTZ: creating imaging service for focus")
                 imaging_service = camera.create_imaging_service()
+                _force_onvif_service_endpoint(imaging_service, host, try_port, "onvif/imaging_service")
                 source_token = profile.VideoSourceConfiguration.SourceToken
                 print(f"PTZ: imaging source token={source_token!r}")
                 focus_move = imaging_service.create_type("Move")
