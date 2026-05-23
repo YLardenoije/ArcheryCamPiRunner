@@ -40,37 +40,30 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
    sudo apt-get update
    sudo apt-get install python3-pip python3-tk vlc
    ```
+| `RTSP_SCAN_ALWAYS_MERGE` | Always run RTSP subnet scan at boot and merge with zeroconf/ONVIF results | `True` |
+| `RTSP_SCAN_BOOT_PASSES` | Number of RTSP scan passes on boot | `2` |
+| `RTSP_SCAN_BOOT_PASS_DELAY_SECONDS` | Delay between boot RTSP scan passes | `2.0` |
+| `DISCOVERY_REFRESH_ENABLED` | Run background RTSP rescans after boot to catch late network readiness | `True` |
+| `DISCOVERY_REFRESH_ATTEMPTS` | Number of background rescan attempts | `6` |
+| `DISCOVERY_REFRESH_INTERVAL_SECONDS` | Delay between background rescan attempts | `20.0` |
+| `BOOT_REAPPLY_ZOOM_ON_STARTUP` | Re-apply saved zoom for startup camera (zoom-out then back in) | `True` |
+| `BOOT_REAPPLY_ZOOM_DELAY_SECONDS` | Delay before startup zoom reapply begins | `2.0` |
+| `BOOT_REAPPLY_ZOOM_ATTEMPTS` | Number of startup zoom reapply attempts | `2` |
+| `BOOT_REAPPLY_ZOOM_RETRY_DELAY_SECONDS` | Delay between startup zoom reapply attempts | `5.0` |
 
 3. **Install Python dependencies:**
    ```bash
    pip3 install flask pillow python-vlc
-   ```
-
-4. **Configure the application:**
-   Edit `config.py` to set your preferences:
    ```python
    RTSP_URL = ""
-   FLASK_PORT = 8080
-   ```
-   The app discovers RTSP cameras via zeroconf on launch and fills the web UI dropdown with the available cameras.
 
 5. **(Optional) Setup Network Bridge:**
-   If using a USB-to-LAN adapter (eth1) to extend network connectivity, bridge it with the built-in Ethernet (eth0):
-   ```bash
-   chmod +x setup_bridge_persistent.sh
    sudo ./setup_bridge_persistent.sh
    ```
-   This creates a persistent bridge that survives reboots, allowing both interfaces to act as one logical network connection.
-
-## Usage
-
 ### Starting the Application
 
-Run the main application:
-```bash
-python3 server3.py
-```
 
+If using Raspberry Pi Connect without a physical HDMI display attached, early boot can expose a temporary virtual framebuffer size before the display stack settles. The app now performs delayed fullscreen geometry re-sync passes during startup to reduce this race. If the remote view still looks odd, set a fixed HDMI mode in Raspberry Pi firmware config.
 The application will:
 - Start in fullscreen kiosk mode
 - Discover cameras on launch and begin streaming from the first discovered camera

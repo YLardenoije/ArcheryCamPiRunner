@@ -13,6 +13,7 @@ class KioskGUI:
         self._gui_lock = threading.Lock()
         self._showing_image = False
         self._current_image_name = None
+        self._last_geometry = ""
         
         # Keep references to PhotoImage objects to prevent GC
         self._image_tk_ref = None
@@ -28,13 +29,39 @@ class KioskGUI:
         
         # Create UI elements
         self._create_widgets()
+        self._schedule_geometry_resyncs()
+
+    def _sync_screen_geometry(self):
+        """Re-apply fullscreen geometry when screen size changes after boot."""
+        sw = int(self.root.winfo_screenwidth() or 0)
+        sh = int(self.root.winfo_screenheight() or 0)
+        if sw <= 0 or sh <= 0:
+            return
+
+        geometry = f"{sw}x{sh}+0+0"
+        if geometry == self._last_geometry:
+            return
+
+        self._last_geometry = geometry
+        self.screen_w = sw
+        self.screen_h = sh
+        self._black_bg = None  # Force background refresh on next image render.
+        self.root.geometry(geometry)
+        print(f"GUI: geometry sync -> {geometry}")
+
+    def _schedule_geometry_resyncs(self):
+        """Run a few delayed geometry syncs to handle display-manager startup races."""
+        for delay_ms in (250, 1000, 2500, 5000):
+            self.root.after(delay_ms, self._sync_screen_geometry)
     
     def _setup_window(self):
         """Configure the root window for kiosk mode."""
         self.root.title("Kiosk")
         self.root.attributes("-fullscreen", True)
         self.root.overrideredirect(True)  # Remove window decorations
-        self.root.geometry(f"{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0")
+        initial_geometry = f"{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0"
+        self._last_geometry = initial_geometry
+        self.root.geometry(initial_geometry)
         self.root.configure(background="black")
         self.root.config(cursor="none")  # Hide mouse cursor
         self.root.focus_set()  # Ensure window has focus
