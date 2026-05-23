@@ -316,25 +316,50 @@ if __name__ == "__main__":
                 def _boot_reapply_zoom():
                     try:
                         delay = max(0.0, float(getattr(config, "BOOT_REAPPLY_ZOOM_DELAY_SECONDS", 2.0)))
+                        attempts = max(1, int(getattr(config, "BOOT_REAPPLY_ZOOM_ATTEMPTS", 2)))
+                        retry_delay = max(0.0, float(getattr(config, "BOOT_REAPPLY_ZOOM_RETRY_DELAY_SECONDS", 5.0)))
+                        print(
+                            "Boot PTZ reapply scheduled:",
+                            f"delay={delay:.1f}s",
+                            f"attempts={attempts}",
+                            f"retry_delay={retry_delay:.1f}s",
+                        )
                         if delay > 0.0:
                             time.sleep(delay)
 
                         ptz = startup_camera.get("ptz", {}) or {}
                         zoom = max(0.0, min(1.0, float(ptz.get("zoom", 0.0))))
                         focus = max(0.0, min(1.0, float(ptz.get("focus", 0.0))))
-                        print(f"Boot PTZ reapply: camera={startup_camera.get('name', 'camera')} zoom={zoom:.4f}")
-                        ok, msg = web._apply_ptz(
-                            startup_camera,
-                            zoom,
-                            focus,
-                            apply_zoom=True,
-                            apply_focus=False,
+                        print(
+                            "Boot PTZ reapply target:",
+                            f"camera={startup_camera.get('name', 'camera')}",
+                            f"host={startup_camera.get('host', '')}",
+                            f"zoom={zoom:.4f}",
                         )
-                        print("Boot PTZ reapply:", "ok" if ok else "failed", msg)
+
+                        for attempt in range(1, attempts + 1):
+                            if attempt > 1 and retry_delay > 0.0:
+                                time.sleep(retry_delay)
+
+                            print(f"Boot PTZ reapply attempt {attempt}/{attempts}")
+                            ok, msg = web._apply_ptz(
+                                startup_camera,
+                                zoom,
+                                focus,
+                                apply_zoom=True,
+                                apply_focus=False,
+                            )
+                            print("Boot PTZ reapply:", "ok" if ok else "failed", msg)
+                            if ok:
+                                break
                     except Exception as exc:
                         print(f"Boot PTZ reapply error: {exc}")
 
                 threading.Thread(target=_boot_reapply_zoom, daemon=True).start()
+            elif startup_camera:
+                print("Boot PTZ reapply skipped: disabled by config")
+            else:
+                print("Boot PTZ reapply skipped: no startup camera selected")
         else:
             print("No discovered stream available at launch; waiting for a camera selection")
 

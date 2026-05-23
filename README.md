@@ -45,6 +45,8 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 | `RTSP_SCAN_BOOT_PASS_DELAY_SECONDS` | Delay between boot RTSP scan passes | `2.0` |
 | `BOOT_REAPPLY_ZOOM_ON_STARTUP` | Re-apply saved zoom for startup camera (zoom-out then back in) | `True` |
 | `BOOT_REAPPLY_ZOOM_DELAY_SECONDS` | Delay before startup zoom reapply begins | `2.0` |
+| `BOOT_REAPPLY_ZOOM_ATTEMPTS` | Number of startup zoom reapply attempts | `2` |
+| `BOOT_REAPPLY_ZOOM_RETRY_DELAY_SECONDS` | Delay between startup zoom reapply attempts | `5.0` |
 
 3. **Install Python dependencies:**
    ```bash
