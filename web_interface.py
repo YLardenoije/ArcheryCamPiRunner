@@ -253,6 +253,8 @@ class WebInterface:
         self.app.route("/show_stream")(self.show_stream)
         self.app.route("/images/<path:name>")(self.serve_image)
         self.app.route("/set_stream")(self.set_stream)
+        self.app.route("/set_stream_to_primary_camera", methods=["GET", "POST"])(self.set_stream_to_primary_camera)
+        self.app.route("/set_stream_to_secondary_camera", methods=["GET", "POST"])(self.set_stream_to_secondary_camera)
         self.app.route("/camera_settings", methods=["POST"])(self.camera_settings)
         self.app.route("/ptz_live", methods=["POST"])(self.ptz_live)
         self.app.route("/get_primary_url", methods=["GET"])(self.get_primary_url)
@@ -412,17 +414,9 @@ class WebInterface:
         """Serve an image file."""
         name = unquote(name)
         return send_from_directory(config.UPLOAD_FOLDER, name)
-    
-    def set_stream(self):
-        """Change the RTSP stream URL."""
-        new_url = request.args.get("url")
-        if not new_url:
-            return "Missing url parameter", 400
-        self.rtsp_url = new_url
-        for camera in self.camera_choices:
-            if camera.get("url") == new_url:
-                break
-        # Restart VLC media safely in background
+
+    def _restart_stream_background(self):
+        """Restart VLC media safely in a background thread."""
         def do_restart():
             try:
                 self.vlc_player.stop()
@@ -442,7 +436,48 @@ class WebInterface:
                 ok, msg = self._apply_ptz(selected, zoom, focus)
                 print("PTZ apply on stream select:", "ok" if ok else "failed", msg)
         threading.Thread(target=do_restart, daemon=True).start()
+
+    def _set_stream_to_role(self, role):
+        """Set active stream to the camera with the requested role."""
+        camera = self._find_camera_by_role(role)
+        role_name = (role or "").strip().lower()
+        if not camera:
+            return {"ok": False, "msg": f"No {role_name} camera configured"}, 404
+
+        target_url = (camera.get("url") or "").strip()
+        if not target_url:
+            return {"ok": False, "msg": f"{role_name.capitalize()} camera has no URL"}, 404
+
+        self.rtsp_url = target_url
+        self._restart_stream_background()
+        return {
+            "ok": True,
+            "msg": "Stream switch scheduled",
+            "role": role_name,
+            "url": target_url,
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
+    
+    def set_stream(self):
+        """Change the RTSP stream URL."""
+        new_url = request.args.get("url")
+        if not new_url:
+            return "Missing url parameter", 400
+        self.rtsp_url = new_url
+        for camera in self.camera_choices:
+            if camera.get("url") == new_url:
+                break
+        self._restart_stream_background()
         return redirect(url_for("index"))
+
+    def set_stream_to_primary_camera(self):
+        """Set active stream to the configured primary camera."""
+        return self._set_stream_to_role("primary")
+
+    def set_stream_to_secondary_camera(self):
+        """Set active stream to the configured secondary camera."""
+        return self._set_stream_to_role("secondary")
 
     def camera_settings(self):
         """Update persistent camera metadata and optional PTZ control."""

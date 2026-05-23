@@ -27,6 +27,8 @@ This document describes the HTTP endpoints exposed by the kiosk web server.
 - `GET /show_stream`: Switch kiosk display to current RTSP stream.
 - `GET /images/<name>`: Fetch image file contents.
 - `GET /set_stream?url=<rtsp-url>`: Set active stream and restart player.
+- `GET|POST /set_stream_to_primary_camera`: Set active stream to configured primary camera.
+- `GET|POST /set_stream_to_secondary_camera`: Set active stream to configured secondary camera.
 - `POST /camera_settings`: Update camera metadata and stored PTZ values.
 - `POST /ptz_live`: Apply live PTZ command (JSON).
 - `GET /get_primary_url`: Return configured primary camera URL.
@@ -109,6 +111,64 @@ Example:
 
 ```bash
 curl "http://<pi-ip>:8080/set_stream?url=rtsp://192.168.100.198:554/11"
+```
+
+## GET|POST /set_stream_to_primary_camera
+
+Sets active stream to the configured primary camera and schedules a background player restart.
+
+Success response:
+- `HTTP 200`
+- JSON:
+
+```json
+{
+  "ok": true,
+  "msg": "Stream switch scheduled",
+  "role": "primary",
+  "url": "rtsp://192.168.100.198:554/11",
+  "name": "main",
+  "host": "192.168.100.198"
+}
+```
+
+Failure response:
+- `HTTP 404`
+- JSON: `{"ok": false, "msg": "No primary camera configured"}`
+
+Example:
+
+```bash
+curl http://<pi-ip>:8080/set_stream_to_primary_camera
+```
+
+## GET|POST /set_stream_to_secondary_camera
+
+Sets active stream to the configured secondary camera and schedules a background player restart.
+
+Success response:
+- `HTTP 200`
+- JSON:
+
+```json
+{
+  "ok": true,
+  "msg": "Stream switch scheduled",
+  "role": "secondary",
+  "url": "rtsp://192.168.10.103:554/11",
+  "name": "secondary",
+  "host": "192.168.10.103"
+}
+```
+
+Failure response:
+- `HTTP 404`
+- JSON: `{"ok": false, "msg": "No secondary camera configured"}`
+
+Example:
+
+```bash
+curl http://<pi-ip>:8080/set_stream_to_secondary_camera
 ```
 
 ## POST /camera_settings

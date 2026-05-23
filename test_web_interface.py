@@ -369,6 +369,46 @@ class TestWebInterface(unittest.TestCase):
         self.assertEqual(result[1], 404)
         self.assertFalse(result[0]["ok"])
 
+    def test_set_stream_to_primary_camera_success(self):
+        web = self._create_web_interface_with_settings()
+        web.camera_choices[0]["role"] = "primary"
+
+        with patch('web_interface.threading.Thread') as mock_thread:
+            result = web.set_stream_to_primary_camera()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["role"], "primary")
+        self.assertEqual(result["url"], "rtsp://192.168.100.198:554/live/0/MAIN")
+        self.assertEqual(web.rtsp_url, "rtsp://192.168.100.198:554/live/0/MAIN")
+        mock_thread.assert_called_once()
+
+    def test_set_stream_to_primary_camera_missing(self):
+        web = self._create_web_interface_with_settings()
+
+        result = web.set_stream_to_primary_camera()
+        self.assertEqual(result[1], 404)
+        self.assertFalse(result[0]["ok"])
+
+    def test_set_stream_to_secondary_camera_success(self):
+        web = self._create_web_interface_with_settings()
+        web.camera_choices[0]["role"] = "secondary"
+
+        with patch('web_interface.threading.Thread') as mock_thread:
+            result = web.set_stream_to_secondary_camera()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["role"], "secondary")
+        self.assertEqual(result["url"], "rtsp://192.168.100.198:554/live/0/MAIN")
+        self.assertEqual(web.rtsp_url, "rtsp://192.168.100.198:554/live/0/MAIN")
+        mock_thread.assert_called_once()
+
+    def test_set_stream_to_secondary_camera_missing(self):
+        web = self._create_web_interface_with_settings()
+
+        result = web.set_stream_to_secondary_camera()
+        self.assertEqual(result[1], 404)
+        self.assertFalse(result[0]["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
