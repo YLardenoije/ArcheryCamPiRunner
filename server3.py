@@ -19,6 +19,34 @@ from vlc_player import VLCPlayer
 from gui import KioskGUI
 from web_interface import WebInterface
 
+
+def _merge_cameras(base_cameras, extra_cameras):
+    """Merge camera lists by URL while preserving existing metadata."""
+    merged = list(base_cameras or [])
+    by_url = {}
+    for camera in merged:
+        url = (camera.get("url") or "").strip()
+        if url:
+            by_url[url] = camera
+
+    for camera in extra_cameras or []:
+        url = (camera.get("url") or "").strip()
+        if not url:
+            continue
+
+        if url in by_url:
+            existing = by_url[url]
+            # Preserve user naming/roles from earlier sources, but fill gaps.
+            for key in ("host", "port", "service_type", "source"):
+                if not existing.get(key) and camera.get(key):
+                    existing[key] = camera.get(key)
+            continue
+
+        by_url[url] = camera
+        merged.append(camera)
+
+    return merged
+
 def shutdown(*args):
     """Shutdown the application gracefully."""
     print("Shutting down...")
@@ -60,36 +88,51 @@ if __name__ == "__main__":
             for camera in discovered_cameras:
                 print(f" - {camera['name']}: {camera['url']}")
 
-    if not discovered_cameras and config.ENABLE_DISCOVERY_FALLBACKS:
+    scan_always_merge = bool(getattr(config, "RTSP_SCAN_ALWAYS_MERGE", False))
+    if config.ENABLE_DISCOVERY_FALLBACKS and (scan_always_merge or not discovered_cameras):
         print("Activating fallback 2/2: RTSP subnet port scan")
-        if getattr(config, "RTSP_SCAN_SUBNETS", None):
-            print(f"RTSP fallback multi-subnet mode: {config.RTSP_SCAN_SUBNETS}")
-            discovered_cameras = discover_rtsp_port_scan_cameras_multi(
-                subnet_cidrs=config.RTSP_SCAN_SUBNETS,
-                ports=config.RTSP_SCAN_PORTS,
-                timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
-                max_hosts=config.RTSP_SCAN_MAX_HOSTS,
-                default_path=config.RTSP_DEFAULT_PATH,
-                interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
-                require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
-                connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
-                retry_without_handshake=config.RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE,
-                path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
-            )
-        else:
-            discovered_cameras = discover_rtsp_port_scan_cameras(
-                subnet_cidr=config.RTSP_SCAN_SUBNET,
-                ports=config.RTSP_SCAN_PORTS,
-                timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
-                max_hosts=config.RTSP_SCAN_MAX_HOSTS,
-                default_path=config.RTSP_DEFAULT_PATH,
-                interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
-                require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
-                connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
-                path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
-            )
+        scan_passes = max(1, int(getattr(config, "RTSP_SCAN_BOOT_PASSES", 1)))
+        scan_delay = max(0.0, float(getattr(config, "RTSP_SCAN_BOOT_PASS_DELAY_SECONDS", 1.0)))
+
+        for pass_idx in range(scan_passes):
+            if pass_idx > 0 and scan_delay > 0.0:
+                print(f"RTSP boot rescan waiting {scan_delay:.1f}s before pass {pass_idx + 1}/{scan_passes}")
+                time.sleep(scan_delay)
+
+            if getattr(config, "RTSP_SCAN_SUBNETS", None):
+                print(f"RTSP fallback multi-subnet mode (pass {pass_idx + 1}/{scan_passes}): {config.RTSP_SCAN_SUBNETS}")
+                scanned = discover_rtsp_port_scan_cameras_multi(
+                    subnet_cidrs=config.RTSP_SCAN_SUBNETS,
+                    ports=config.RTSP_SCAN_PORTS,
+                    timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                    max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                    default_path=config.RTSP_DEFAULT_PATH,
+                    interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                    require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+                    connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
+                    retry_without_handshake=config.RTSP_SCAN_RETRY_WITHOUT_HANDSHAKE,
+                    path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
+                )
+            else:
+                scanned = discover_rtsp_port_scan_cameras(
+                    subnet_cidr=config.RTSP_SCAN_SUBNET,
+                    ports=config.RTSP_SCAN_PORTS,
+                    timeout_seconds=config.RTSP_SCAN_FALLBACK_TIMEOUT,
+                    max_hosts=config.RTSP_SCAN_MAX_HOSTS,
+                    default_path=config.RTSP_DEFAULT_PATH,
+                    interface_hint=config.RTSP_SCAN_INTERFACE_HINT,
+                    require_rtsp_handshake=config.RTSP_SCAN_REQUIRE_RTSP_HANDSHAKE,
+                    connect_timeout_seconds=config.RTSP_SCAN_CONNECT_TIMEOUT,
+                    path_candidates=config.RTSP_SCAN_PATH_CANDIDATES,
+                )
+
+            before = len(discovered_cameras)
+            discovered_cameras = _merge_cameras(discovered_cameras, scanned)
+            added = len(discovered_cameras) - before
+            print(f"RTSP scan pass {pass_idx + 1}/{scan_passes}: found={len(scanned)} added={added} total={len(discovered_cameras)}")
+
         if discovered_cameras:
-            print("Discovered cameras via RTSP scan fallback:")
+            print("Discovered cameras after RTSP scan merge:")
             for camera in discovered_cameras:
                 print(f" - {camera['name']}: {camera['url']}")
 
@@ -268,6 +311,30 @@ if __name__ == "__main__":
         gui.embed_vlc()
         if boot_rtsp_url:
             vlc_player.start_media(boot_rtsp_url)
+
+            if startup_camera and bool(getattr(config, "BOOT_REAPPLY_ZOOM_ON_STARTUP", True)):
+                def _boot_reapply_zoom():
+                    try:
+                        delay = max(0.0, float(getattr(config, "BOOT_REAPPLY_ZOOM_DELAY_SECONDS", 2.0)))
+                        if delay > 0.0:
+                            time.sleep(delay)
+
+                        ptz = startup_camera.get("ptz", {}) or {}
+                        zoom = max(0.0, min(1.0, float(ptz.get("zoom", 0.0))))
+                        focus = max(0.0, min(1.0, float(ptz.get("focus", 0.0))))
+                        print(f"Boot PTZ reapply: camera={startup_camera.get('name', 'camera')} zoom={zoom:.4f}")
+                        ok, msg = web._apply_ptz(
+                            startup_camera,
+                            zoom,
+                            focus,
+                            apply_zoom=True,
+                            apply_focus=False,
+                        )
+                        print("Boot PTZ reapply:", "ok" if ok else "failed", msg)
+                    except Exception as exc:
+                        print(f"Boot PTZ reapply error: {exc}")
+
+                threading.Thread(target=_boot_reapply_zoom, daemon=True).start()
         else:
             print("No discovered stream available at launch; waiting for a camera selection")
 
