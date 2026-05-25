@@ -7,6 +7,7 @@ A Raspberry Pi kiosk application for displaying RTSP camera streams and static i
 - **RTSP Stream Display**: View live camera feeds from network cameras
 - **Image Display**: Upload and display static images in fullscreen
 - **Web Interface**: Remote control via browser on any device
+- **Multi-Pi Dashboard**: Register Pis by MAC, broadcast commands, and run commercials loops across the fleet
 - **Kiosk Mode**: Fullscreen display with no window decorations
 - **Seamless Switching**: Switch between live stream and images
 - **Multi-Camera Support**: Change RTSP stream URLs on the fly
@@ -69,6 +70,28 @@ The application will:
 - Discover cameras on launch and begin streaming from the first discovered camera
 - Launch a web server on port 8080 (configurable)
 
+### Multi-Pi Dashboard
+
+Run the dashboard from a workstation or admin Pi to manage multiple kiosk devices:
+
+```bash
+python3 pi_dashboard.py
+```
+
+The dashboard lets you:
+- Register Pis using their MAC address and API base URL
+- Auto-discover reachable kiosk Pis on local/configured subnets
+- Rename a Pi without depending on its IP address
+- Open a Pi's remote UI in a new browser tab
+- Broadcast update, primary, and secondary commands to every registered Pi
+- Start a commercials loop that shows the same image sequence on every Pi, falling back to `Logo.jpg` when an image is missing
+
+Discovery notes:
+- The dashboard probes each host for the kiosk API on port `FLASK_PORT`.
+- When a host responds, it resolves and uses the MAC address as the stable registry key.
+- If MAC resolution fails, the host is reported as unresolved and not added.
+- You can scope scanning with `DASHBOARD_DISCOVERY_SUBNETS` and `DASHBOARD_DISCOVERY_MAX_HOSTS` in `config.py`.
+
 ### Web Interface
 
 Access the web interface from any browser on the same network:
@@ -97,6 +120,8 @@ ArcheryCamPiRunner/
 ├── vlc_player.py                # VLC media player management
 ├── gui.py                       # Tkinter GUI and display logic
 ├── web_interface.py             # Flask web server and routes
+├── pi_dashboard.py              # Multi-Pi control dashboard
+├── pi_registry.py               # Persistent Pi registry keyed by MAC
 ├── setup_bridge.sh              # Network bridge setup (temporary)
 ├── setup_bridge_persistent.sh   # Network bridge setup (persistent)
 ├── update_app.sh                # Pull latest code and refresh dependencies

@@ -2,10 +2,14 @@
 import os
 import time
 import threading
+import subprocess
 from urllib.parse import unquote
 from flask import Flask, request, redirect, send_from_directory, url_for, render_template_string
 
 import config
+
+
+ALLOWED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff")
 
 
 INDEX_HTML = """
@@ -250,8 +254,13 @@ class WebInterface:
         self.app.route("/show_stream")(self.show_stream)
         self.app.route("/images/<path:name>")(self.serve_image)
         self.app.route("/set_stream")(self.set_stream)
+        self.app.route("/set_stream_to_primary_camera", methods=["GET", "POST"])(self.set_stream_to_primary_camera)
+        self.app.route("/set_stream_to_secondary_camera", methods=["GET", "POST"])(self.set_stream_to_secondary_camera)
         self.app.route("/camera_settings", methods=["POST"])(self.camera_settings)
         self.app.route("/ptz_live", methods=["POST"])(self.ptz_live)
+        self.app.route("/get_primary_url", methods=["GET"])(self.get_primary_url)
+        self.app.route("/get_secondary_url", methods=["GET"])(self.get_secondary_url)
+        self.app.route("/update", methods=["GET", "POST"])(self.update_app)
         self.app.route("/kill")(self.kill_app)
 
     @staticmethod
@@ -273,9 +282,22 @@ class WebInterface:
             return float(default)
         return max(0.0, min(1.0, num))
 
+    @staticmethod
+    def _is_supported_image_filename(filename):
+        return bool(filename and filename.lower().endswith(ALLOWED_IMAGE_EXTENSIONS))
+
     def _find_camera_by_url(self, url):
         for camera in self.camera_choices:
             if camera.get("url") == url:
+                return camera
+        return None
+
+    def _find_camera_by_role(self, role):
+        wanted = (role or "").strip().lower()
+        if wanted not in ("primary", "secondary"):
+            return None
+        for camera in self.camera_choices:
+            if (camera.get("role") or "").strip().lower() == wanted:
                 return camera
         return None
 
@@ -309,12 +331,38 @@ class WebInterface:
                                   apply_zoom=apply_zoom, apply_focus=apply_focus)
         print(f"PTZ live slider ({changed}): {'ok' if ok else 'failed'} {msg}")
         return {"ok": ok, "msg": msg}
+
+    def get_primary_url(self):
+        """Return the configured primary camera URL as JSON."""
+        camera = self._find_camera_by_role("primary")
+        if not camera:
+            return {"ok": False, "msg": "No primary camera configured"}, 404
+        return {
+            "ok": True,
+            "role": "primary",
+            "url": camera.get("url", ""),
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
+
+    def get_secondary_url(self):
+        """Return the configured secondary camera URL as JSON."""
+        camera = self._find_camera_by_role("secondary")
+        if not camera:
+            return {"ok": False, "msg": "No secondary camera configured"}, 404
+        return {
+            "ok": True,
+            "role": "secondary",
+            "url": camera.get("url", ""),
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
     
     def index(self):
         """Main page."""
         files = sorted([
             f for f in os.listdir(config.UPLOAD_FOLDER)
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp"))
+            if self._is_supported_image_filename(f)
         ])
         return render_template_string(
             INDEX_HTML,
@@ -330,6 +378,8 @@ class WebInterface:
             return "No file uploaded", 400
         # Sanitize filename
         filename = os.path.basename(file.filename)
+        if not self._is_supported_image_filename(filename):
+            return f"Unsupported file type. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}", 400
         savepath = os.path.join(config.UPLOAD_FOLDER, filename)
         file.save(savepath)
         return redirect(url_for("index"))
@@ -366,17 +416,9 @@ class WebInterface:
         """Serve an image file."""
         name = unquote(name)
         return send_from_directory(config.UPLOAD_FOLDER, name)
-    
-    def set_stream(self):
-        """Change the RTSP stream URL."""
-        new_url = request.args.get("url")
-        if not new_url:
-            return "Missing url parameter", 400
-        self.rtsp_url = new_url
-        for camera in self.camera_choices:
-            if camera.get("url") == new_url:
-                break
-        # Restart VLC media safely in background
+
+    def _restart_stream_background(self):
+        """Restart VLC media safely in a background thread."""
         def do_restart():
             try:
                 self.vlc_player.stop()
@@ -396,7 +438,71 @@ class WebInterface:
                 ok, msg = self._apply_ptz(selected, zoom, focus)
                 print("PTZ apply on stream select:", "ok" if ok else "failed", msg)
         threading.Thread(target=do_restart, daemon=True).start()
+
+    def _set_stream_to_role(self, role):
+        """Set active stream to the camera with the requested role."""
+        camera = self._find_camera_by_role(role)
+        role_name = (role or "").strip().lower()
+        if not camera:
+            return {"ok": False, "msg": f"No {role_name} camera configured"}, 404
+
+        target_url = (camera.get("url") or "").strip()
+        if not target_url:
+            return {"ok": False, "msg": f"{role_name.capitalize()} camera has no URL"}, 404
+
+        self.rtsp_url = target_url
+        self._restart_stream_background()
+        return {
+            "ok": True,
+            "msg": "Stream switch scheduled",
+            "role": role_name,
+            "url": target_url,
+            "name": camera.get("name", "camera"),
+            "host": camera.get("host", ""),
+        }
+    
+    def set_stream(self):
+        """Change the RTSP stream URL."""
+        new_url = request.args.get("url")
+        if not new_url:
+            return "Missing url parameter", 400
+        self.rtsp_url = new_url
+        for camera in self.camera_choices:
+            if camera.get("url") == new_url:
+                break
+        self._restart_stream_background()
         return redirect(url_for("index"))
+
+    def set_stream_to_primary_camera(self):
+        """Set active stream to the configured primary camera."""
+        return self._set_stream_to_role("primary")
+
+    def set_stream_to_secondary_camera(self):
+        """Set active stream to the configured secondary camera."""
+        return self._set_stream_to_role("secondary")
+
+    def update_app(self):
+        """Run updater script in the background and return JSON."""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        update_script = os.path.join(base_dir, "update.sh")
+        if not os.path.exists(update_script):
+            # Backward compatibility with older script naming.
+            update_script = os.path.join(base_dir, "update_app.sh")
+        if not os.path.exists(update_script):
+            return {"ok": False, "msg": "Update script not found"}, 404
+
+        def do_update():
+            try:
+                subprocess.run(["bash", update_script], cwd=base_dir, check=False)
+            except Exception as exc:
+                print(f"Update script failed to start: {exc}")
+
+        threading.Thread(target=do_update, daemon=True).start()
+        return {
+            "ok": True,
+            "msg": "Update started",
+            "script": os.path.basename(update_script),
+        }
 
     def camera_settings(self):
         """Update persistent camera metadata and optional PTZ control."""
